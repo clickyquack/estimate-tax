@@ -1,0 +1,20 @@
+# Virtual Environment
+venv/
+env/
+
+# Python Cache Files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Database Files
+*.db
+*.sqlite3
+
+# Security & Credentials
+.env
+*.pem
+
+# OS & Editor Files
+.vscode/
