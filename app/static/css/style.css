@@ -1,3 +1,33 @@
-h1{
-    color: #136a0e;
+body {
+    background-color: #f4f7f6;
+}
+
+.client-list {
+    max-height: 50vh;
+    overflow-y: auto;
+}
+
+.content-rows {
+    min-height: calc(100vh - 56px);
+}
+
+.left-panel {
+    border-right: 1px solid #dee2e6;
+    background: #fff;
+    min-height: 100vh;
+}
+
+
+@media (min-width: 768px) {
+    .offcanvas-collapse {
+        display: block !important;
+        position: static !important;
+        visibility: visible !important;
+        transform: none !important;
+        border-right: 1px solid #dee2e6;
+    }
+
+    .mobile-toggle {
+        display: none;
+    }
 }

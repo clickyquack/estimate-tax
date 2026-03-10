@@ -1,6 +1,8 @@
 from flask import Flask, render_template
+
 from .extensions import db
 from config import Config
+
 
 def create_app():
     app = Flask(__name__)
@@ -26,6 +28,13 @@ def create_app():
     @app.route('/')
     def index():
         return render_template('index.html')
+    
+    @app.route('/dashboard')
+    def dashboard():
+        from .models import Client
+        
+        all_clients = Client.query.all() # Query all clients from the database
+        return render_template('dashboard.html', clients=all_clients)
 
 
 
