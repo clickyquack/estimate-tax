@@ -1,4 +1,4 @@
-from flask import Flask, render_template
+from flask import Flask, render_template, request, redirect, url_for
 
 from .extensions import db
 from config import Config
@@ -29,6 +29,10 @@ def create_app():
     def index():
         return render_template('index.html')
     
+    @app.route('/login')
+    def login():
+        return render_template('login.html')
+    
     @app.route('/dashboard')
     def dashboard():
         from .models import Client
@@ -44,26 +48,34 @@ def create_app():
     
     # Test route
     @app.route('/test')
-    def hello():
-        return "<h1>Estimate.tax Test Dashboard</h1> <p><a href=\"/\">Index</a></p> <p><a href=\"/test-db\">Test Database</a></p> "
-    
+    def test():
+        return render_template('test.html')
 
     # Test database
     @app.route('/test-db')
     def test_db():
         from .models import Client
-        import uuid # Generates a short unique string
         
-        # 1. Create a unique identifier for this specific test run
+        # Obtain all clients from the database
+        all_clients = Client.query.all()
+        
+        # Pass the clients and the name of the last added client to the template
+        return render_template('test_db.html', clients=all_clients)
+    
+    # Add new client to database
+    @app.route('/generate_client', methods=['POST'])
+    def generate_client():
+        from .models import Client
+        import uuid
+        
+        # Generate test client
         unique_id = str(uuid.uuid4())[:8]
-        
-        # 2. Use that ID to make the name and email unique
         new_client = Client(
-            name=f"{unique_id}", 
+            name=f"Test-{unique_id}", 
             email=f"{unique_id}@email.com"
         )
         
-        # 3. Try to add and commit
+        # Add client to database
         try:
             db.session.add(new_client)
             db.session.commit()
@@ -71,11 +83,8 @@ def create_app():
             db.session.rollback()
             return f"Database Error: {e}"
         
-        # 4. Return the full list to see the unique entries growing
-        all_clients = Client.query.all()
-        output = [f"ID: {c.id} | Name: {c.name} | Email: {c.email}" for c in all_clients]
-        
-        return "<br>".join(output)
+        # 3. Redirect back to the test page to see the update
+        return redirect(url_for('test_db'))
 
 
 

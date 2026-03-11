@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+
+{% block title %}Test Dashboard{% endblock %}
+
+{% block content %}
+    <h1>Developer Test Dashboard</h1> 
+    <ul>
+        <li><a href="{{ url_for('test_db') }}">Database Test</a></li>
+    </ul>
+{% endblock %}
+
+{% block scripts %}{% endblock %}

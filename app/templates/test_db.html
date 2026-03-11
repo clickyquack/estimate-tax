@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+
+{% block title %}Database Test{% endblock %}
+
+{% block content %}
+    <div class="container py-5">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2>Database Test</h2>
+        
+            <form action="{{ url_for('generate_client') }}" method="POST">
+                <button type="submit" class="btn btn-primary">Generate New Client</button>
+            </form>
+        </div>
+
+        <div class="card border-0 shadow-sm">
+            <div class="card-body p-0">
+                <table class="table table-hover mb-0">
+                    <thead class="table-dark">
+                        <tr>
+                            <th class="ps-4">ID</th>
+                            <th>Client Name</th>
+                            <th>Email Address</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for client in clients %}
+                        <tr>
+                            <td class="ps-4">{{ client.id }}</td>
+                            <td class="fw-bold">{{ client.name }}</td>
+                            <td>{{ client.email }}</td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="3" class="text-center py-4 text-muted">No records found in the database.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+{% endblock %}
+
+{% block scripts %}{% endblock %}
