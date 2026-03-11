@@ -2,6 +2,8 @@
 
 {% block title %}Dashboard{% endblock %}
 
+{% block styles %}{% endblock %}
+
 {% block content %}
 
     <!-- Main Content -->
@@ -9,7 +11,7 @@
         <div class="row content-rows">
             
             <!-- Left Panel -->
-            <aside class="col-md-3 col-lg-2 offcanvas-md offcanvas-start bg-white shadow-sm p-3" tabindex="-1" id="sidebarMenu">
+            <aside class="col-md-3 col-lg-2 offcanvas-md offcanvas-start bg-white shadow-sm p-3 left-panel" tabindex="-1" id="sidebarMenu">
                 <div class="offcanvas-header d-md-none">
                     <h5 class="offcanvas-title">Menu</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="offcanvas" data-bs-target="#sidebarMenu"></button>
@@ -48,8 +50,17 @@
                     <div class="col-md-12">
                         <div class="card h-100 border-0 shadow-sm text-center p-4">
                             <div class="card-body">
-                                <h5 class="card-title text-muted">Pending Estimates</h5>
-                                <h2 class="fw-bold">7</h2>
+                                <h5 class="card-title text-muted">Visualize Tax Info</h5>
+                                <h2 class="fw-bold">Graph goes here</h2>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-md-12">
+                        <div class="card h-100 border-0 shadow-sm text-center p-4">
+                            <div class="card-body">
+                                <h5 class="card-title text-muted">Input Client Tax Data</h5>
+                                <h2 class="fw-bold">Form goes here</h2>
                             </div>
                         </div>
                     </div>
@@ -57,8 +68,8 @@
                     <div class="col-md-6">
                         <div class="card h-100 border-0 shadow-sm text-center p-4">
                             <div class="card-body">
-                                <h5 class="card-title text-muted">Clients</h5>
-                                <h2 class="fw-bold">22</h2>
+                                <h5 class="card-title text-muted">Export Client Data</h5>
+                                <h2 class="fw-bold">Export Button</h2>
                             </div>
                         </div>
                     </div>
@@ -66,8 +77,8 @@
                     <div class="col-md-6">
                         <div class="card h-100 border-0 shadow-sm text-center p-4">
                             <div class="card-body">
-                                <h5 class="card-title text-muted">Quarterly Revenue</h5>
-                                <h2 class="fw-bold text-success">$12,450</h2>
+                                <h5 class="card-title text-muted">Schedule Tax Payments</h5>
+                                <h2 class="fw-bold">Example</h2>
                             </div>
                         </div>
                     </div>

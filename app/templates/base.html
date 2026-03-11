@@ -9,17 +9,7 @@
     
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     
-    <style>
-        body {
-            display: flex;
-            flex-direction: column;
-            min-height: 100vh;
-            background-color: #f8f9fa;
-        }
-        .content-wrapper {
-            flex: 1;
-        }
-    </style>
+    {% block styles %}{% endblock %}
 </head>
 <body>
 
@@ -35,6 +25,7 @@
                 <ul class="navbar-nav me-auto mb-2 mb-lg-0">
                     <li class="nav-item"> <a class="nav-link" href="{{ url_for('dashboard') }}">Dashboard</a> </li>
                     <li class="nav-item"> <a class="nav-link" href="{{ url_for('admin') }}">Admin</a> </li>
+                    <li class="nav-item"> <a class="nav-link" href="{{ url_for('sysadmin') }}">System Admin</a> </li>
                 </ul>
                 
                 <ul class="navbar-nav ms-auto">

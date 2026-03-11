@@ -47,6 +47,10 @@ def create_app():
     @app.route('/admin')
     def admin():
         return render_template('admin.html')
+    
+    @app.route('/sysadmin')
+    def sysadmin():
+        return render_template('sysadmin.html')
 
 
 
