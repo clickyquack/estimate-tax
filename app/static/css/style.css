@@ -8,7 +8,7 @@ body {
 }
 
 .content-rows {
-    min-height: calc(100vh - 56px);
+    min-height: calc(100vh - ((56px * 2) + 1px)); /* adjusted for navbar and footer */
 }
 
 .left-panel {

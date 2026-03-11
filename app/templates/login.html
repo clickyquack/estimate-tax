@@ -3,15 +3,48 @@
 {% block title %}Login{% endblock %}
 
 {% block content %}
-    <h1>Welcome to Estimate.tax</h1>
-    <p>This is the login page.</p>
-    
-    <h3>Recent Activity:</h3>
-    <ul>
-        <li>Example 1</li>
-        <li>Example 2</li>
-        <li>Example 3</li>
-    </ul>
-{% endblock %}
+    <div class="container">
+        <div class="row justify-content-center align-items-center" style="min-height: 80vh;">
+            <div class="col-md-5 col-lg-4">
 
-{% block scripts %}{% endblock %}
+                <div class="card border-0 shadow-sm p-4">
+                    <div class="card-body">
+                        <div class="text-center mb-4">
+                            <h2 class="fw-bold">Welcome Back</h2>
+                            <p class="text-muted">Log in to continue</p>
+                        </div>
+
+                        <form action="{{ url_for('login_user') }}" method="POST">
+                            <div class="mb-3">
+                                <label for="email" class="form-label small fw-bold">Email Address</label>
+                                <input type="email" name="email" id="email" class="form-control"
+                                    placeholder="" required>
+                            </div>
+
+                            <div class="mb-3">
+                                <div class="d-flex justify-content-between">
+                                    <label for="password" class="form-label small fw-bold">Password</label>
+                                    <a href="#" class="small text-decoration-none">Forgot?</a>
+                                </div>
+                                <input type="password" name="password" id="password" class="form-control"
+                                    placeholder="" required>
+                            </div>
+
+                            <div class="mb-3 form-check">
+                                <input type="checkbox" class="form-check-input" id="remember">
+                                <label class="form-check-label small text-muted" for="remember">Remember me</label>
+                            </div>
+
+                            <button type="submit" class="btn btn-primary w-100 py-2">Sign In</button>
+                        </form>
+
+                        <div class="text-center mt-4">
+                            <p class="small text-muted">Don't have an account? <a href="#" class="text-decoration-none">Contact Admin</a></p>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+{% endblock %}

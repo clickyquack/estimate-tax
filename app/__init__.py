@@ -33,12 +33,20 @@ def create_app():
     def login():
         return render_template('login.html')
     
+    @app.route('/login_user', methods=['POST'])
+    def login_user():
+        return redirect(url_for('login'))
+    
     @app.route('/dashboard')
     def dashboard():
         from .models import Client
         
         all_clients = Client.query.all() # Query all clients from the database
         return render_template('dashboard.html', clients=all_clients)
+    
+    @app.route('/admin')
+    def admin():
+        return render_template('admin.html')
 
 
 
