@@ -90,3 +90,5 @@ pip freeze > requirements.txt
 | **SQLAlchemy** | Object-Relational Mapper (ORM). Allows managing the database using Python code instead of writing raw SQL strings. Convenient, modular, and secure. Allows for database type to be changed easily. |
 | **SQLite** | Database. Good for development, but not scalable. |
 | **MySQL** | Database. Better for concurrency than SQLite, but needs a server to host it. |
+| **Pytest** | Automated Testing Framework |
+| **HTMX** | Frontend Interactivity. Enables AJAX requests directly from HTML attributes to swap page fragments without a full reload. |

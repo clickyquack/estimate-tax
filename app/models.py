@@ -1,18 +1,246 @@
 from .extensions import db
 from datetime import datetime
 
-# EXAMPLE DATABASE MODELS FOR TESTING
-class Client(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(100), nullable=False)
-    email = db.Column(db.String(120), unique=True, nullable=False)
-    # Relationship to link payments to this client
-    payments = db.relationship('TaxPayment', backref='client', lazy=True)
+from sqlalchemy.orm import declarative_base, relationship
+from sqlalchemy.sql import func
 
-class TaxPayment(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    amount = db.Column(db.Float, nullable=False)
-    date_scheduled = db.Column(db.DateTime, default=datetime.utcnow)
-    is_paid = db.Column(db.Boolean, default=False)
-    # Foreign Key to link to the Client
-    client_id = db.Column(db.Integer, db.ForeignKey('client.id'), nullable=False)
+
+
+# =========================
+# ASSOCIATION TABLES (Many-to-Many)
+# =========================
+role_permissions = db.Table(
+    'role_permissions',
+    db.metadata,
+    db.Column('role_id', db.Integer, db.ForeignKey('roles.id', ondelete='CASCADE'), primary_key=True),
+    db.Column('permission_id', db.Integer, db.ForeignKey('permissions.id', ondelete='CASCADE'), primary_key=True)
+)
+
+user_permissions = db.Table(
+    'user_permissions',
+    db.metadata,
+    db.Column('user_id', db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), primary_key=True),
+    db.Column('permission_id', db.Integer, db.ForeignKey('permissions.id', ondelete='CASCADE'), primary_key=True)
+)
+
+client_assignments = db.Table(
+    'client_assignments',
+    db.metadata,
+    db.Column('user_id', db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), primary_key=True),
+    db.Column('client_id', db.Integer, db.ForeignKey('clients.id', ondelete='CASCADE'), primary_key=True)
+)
+
+export_items = db.Table(
+    'export_items',
+    db.metadata,
+    db.Column('export_id', db.Integer, db.ForeignKey('exports.id', ondelete='CASCADE'), primary_key=True),
+    db.Column('payment_id', db.Integer, db.ForeignKey('scheduled_payments.id', ondelete='CASCADE'), primary_key=True)
+)
+
+
+# =========================
+# MODELS
+# =========================
+class Firm(db.Model):
+    __tablename__ = 'firms'
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    name = db.Column(db.String(255), nullable=False)
+    email = db.Column(db.String(255), nullable=False)
+    plan_type = db.Column(db.String(50))
+    status = db.Column(db.String(50))
+    created_at = db.Column(db.DateTime, server_default=func.now())
+
+    # Relationships
+    users = db.relationship('User', back_populates='firm', cascade='all, delete-orphan')
+    clients = db.relationship('Client', back_populates='firm', cascade='all, delete-orphan')
+    subscriptions = db.relationship('Subscription', back_populates='firm', cascade='all, delete-orphan')
+
+
+class Role(db.Model):
+    __tablename__ = 'roles'
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    name = db.Column(db.String(50), nullable=False, unique=True)
+
+    # Relationships
+    users = db.relationship('User', back_populates='role')
+    permissions = db.relationship('Permission', secondary=role_permissions, back_populates='roles')
+
+
+class Permission(db.Model):
+    __tablename__ = 'permissions'
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    name = db.Column(db.String(100), nullable=False, unique=True)
+
+    # Relationships
+    roles = db.relationship('Role', secondary=role_permissions, back_populates='permissions')
+    users = db.relationship('User', secondary=user_permissions, back_populates='permissions')
+
+
+class User(db.Model):
+    __tablename__ = 'users'
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    firm_id = db.Column(db.Integer, db.ForeignKey('firms.id', ondelete='CASCADE'), nullable=False, index=True)
+    role_id = db.Column(db.Integer, db.ForeignKey('roles.id'), nullable=False)
+    name = db.Column(db.String(255), nullable=False)
+    email = db.Column(db.String(255), nullable=False, unique=True)
+    password_hash = db.Column(db.String(255), nullable=False)
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, server_default=func.now())
+
+    # Relationships
+    firm = db.relationship('Firm', back_populates='users')
+    role = db.relationship('Role', back_populates='users')
+    permissions = db.relationship('Permission', secondary=user_permissions, back_populates='users')
+    clients = db.relationship('Client', secondary=client_assignments, back_populates='users')
+    tax_records = db.relationship('TaxRecord', back_populates='uploaded_by_user')
+    payment_schedules = db.relationship('PaymentSchedule', back_populates='created_by_user')
+    exports = db.relationship('Export', back_populates='user')
+    audit_logs = db.relationship('AuditLog', back_populates='user')
+
+
+class Client(db.Model):
+    __tablename__ = 'clients'
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    firm_id = db.Column(db.Integer, db.ForeignKey('firms.id', ondelete='CASCADE'), nullable=False, index=True)
+    name = db.Column(db.String(255), nullable=False)
+    email = db.Column(db.String(255))
+    phone = db.Column(db.String(50))
+    tax_id = db.Column(db.String(50))
+    address = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, server_default=func.now())
+
+    # Relationships
+    firm = db.relationship('Firm', back_populates='clients')
+    users = db.relationship('User', secondary=client_assignments, back_populates='clients')
+    tax_records = db.relationship('TaxRecord', back_populates='client', cascade='all, delete-orphan')
+
+
+class TaxRecord(db.Model):
+    __tablename__ = 'tax_records'
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    client_id = db.Column(db.Integer, db.ForeignKey('clients.id', ondelete='CASCADE'), nullable=False, index=True)
+    tax_year = db.Column(db.Integer, nullable=False)  # SQLAlchemy doesn't have a native YEAR type universally
+    estimated_tax_total = db.Column(db.Numeric(12, 2), nullable=False)
+    upload_source = db.Column(db.String(255))
+    uploaded_by = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'))
+    created_at = db.Column(db.DateTime, server_default=func.now())
+
+    # Relationships
+    client = db.relationship('Client', back_populates='tax_records')
+    uploaded_by_user = db.relationship('User', back_populates='tax_records')
+    payment_schedules = db.relationship('PaymentSchedule', back_populates='tax_record', cascade='all, delete-orphan')
+
+
+class PaymentSchedule(db.Model):
+    __tablename__ = 'payment_schedules'
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    tax_record_id = db.Column(db.Integer, db.ForeignKey('tax_records.id', ondelete='CASCADE'), nullable=False)
+    schedule_name = db.Column(db.String(255))
+    start_date = db.Column(db.Date)
+    end_date = db.Column(db.Date)
+    frequency = db.Column(db.String(50))
+    total_amount = db.Column(db.Numeric(12, 2))
+    created_by = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'))
+    created_at = db.Column(db.DateTime, server_default=func.now())
+
+    # Relationships
+    tax_record = db.relationship('TaxRecord', back_populates='payment_schedules')
+    created_by_user = db.relationship('User', back_populates='payment_schedules')
+    scheduled_payments = db.relationship('ScheduledPayment', back_populates='schedule', cascade='all, delete-orphan')
+
+
+class ScheduledPayment(db.Model):
+    __tablename__ = 'scheduled_payments'
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    schedule_id = db.Column(db.Integer, db.ForeignKey('payment_schedules.id', ondelete='CASCADE'), nullable=False)
+    due_date = db.Column(db.Date, nullable=False, index=True)
+    amount = db.Column(db.Numeric(12, 2), nullable=False)
+    status = db.Column(db.String(50), default='pending')
+
+    # Relationships
+    schedule = db.relationship('PaymentSchedule', back_populates='scheduled_payments')
+    exports = db.relationship('Export', secondary=export_items, back_populates='payments')
+
+
+class Export(db.Model):
+    __tablename__ = 'exports'
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'))
+    generated_at = db.Column(db.DateTime, server_default=func.now(), index=True)
+    file_path = db.Column(db.String(255))
+    status = db.Column(db.String(50))
+
+    # Relationships
+    user = db.relationship('User', back_populates='exports')
+    payments = db.relationship('ScheduledPayment', secondary=export_items, back_populates='exports')
+
+
+class Subscription(db.Model):
+    __tablename__ = 'subscriptions'
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    firm_id = db.Column(db.Integer, db.ForeignKey('firms.id', ondelete='CASCADE'), nullable=False)
+    plan = db.Column(db.String(100))
+    price = db.Column(db.Numeric(10, 2))
+    billing_cycle = db.Column(db.String(50))
+    start_date = db.Column(db.Date)
+    end_date = db.Column(db.Date)
+    status = db.Column(db.String(50))
+
+    # Relationships
+    firm = db.relationship('Firm', back_populates='subscriptions')
+    billing_payments = db.relationship('BillingPayment', back_populates='subscription', cascade='all, delete-orphan')
+
+
+class BillingPayment(db.Model):
+    __tablename__ = 'billing_payments'
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    subscription_id = db.Column(db.Integer, db.ForeignKey('subscriptions.id', ondelete='CASCADE'), nullable=False)
+    amount = db.Column(db.Numeric(10, 2))
+    payment_date = db.Column(db.DateTime, server_default=func.now())
+    payment_method = db.Column(db.String(100))
+    status = db.Column(db.String(50))
+
+    # Relationships
+    subscription = db.relationship('Subscription', back_populates='billing_payments')
+
+
+class AuditLog(db.Model):
+    __tablename__ = 'audit_logs'
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'))
+    action = db.Column(db.String(255))
+    entity_type = db.Column(db.String(100))
+    entity_id = db.Column(db.Integer)
+    ip_address = db.Column(db.String(45))
+    timestamp = db.Column(db.DateTime, server_default=func.now())
+
+    # Relationships
+    user = db.relationship('User', back_populates='audit_logs')
+
+
+class PermissionLog(db.Model):
+    __tablename__ = 'permission_logs'
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    admin_user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'))
+    target_user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'))
+    permission_id = db.Column(db.Integer, db.ForeignKey('permissions.id', ondelete='SET NULL'))
+    action = db.Column(db.String(50))
+    timestamp = db.Column(db.DateTime, server_default=func.now())
+
+    # Relationships
+    admin_user = db.relationship('User', foreign_keys=[admin_user_id])
+    target_user = db.relationship('User', foreign_keys=[target_user_id])
+    permission = db.relationship('Permission')
