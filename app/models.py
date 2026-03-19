@@ -1,250 +1,246 @@
 from .extensions import db
 from datetime import datetime
 
-from sqlalchemy import (
-    Column, Integer, String, Boolean, DateTime, Date,
-    ForeignKey, Text, Numeric, Table
-)
 from sqlalchemy.orm import declarative_base, relationship
 from sqlalchemy.sql import func
 
-Base = declarative_base()
+
 
 # =========================
 # ASSOCIATION TABLES (Many-to-Many)
 # =========================
-role_permissions = Table(
+role_permissions = db.Table(
     'role_permissions',
-    Base.metadata,
-    Column('role_id', Integer, ForeignKey('roles.id', ondelete='CASCADE'), primary_key=True),
-    Column('permission_id', Integer, ForeignKey('permissions.id', ondelete='CASCADE'), primary_key=True)
+    db.metadata,
+    db.Column('role_id', db.Integer, db.ForeignKey('roles.id', ondelete='CASCADE'), primary_key=True),
+    db.Column('permission_id', db.Integer, db.ForeignKey('permissions.id', ondelete='CASCADE'), primary_key=True)
 )
 
-user_permissions = Table(
+user_permissions = db.Table(
     'user_permissions',
-    Base.metadata,
-    Column('user_id', Integer, ForeignKey('users.id', ondelete='CASCADE'), primary_key=True),
-    Column('permission_id', Integer, ForeignKey('permissions.id', ondelete='CASCADE'), primary_key=True)
+    db.metadata,
+    db.Column('user_id', db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), primary_key=True),
+    db.Column('permission_id', db.Integer, db.ForeignKey('permissions.id', ondelete='CASCADE'), primary_key=True)
 )
 
-client_assignments = Table(
+client_assignments = db.Table(
     'client_assignments',
-    Base.metadata,
-    Column('user_id', Integer, ForeignKey('users.id', ondelete='CASCADE'), primary_key=True),
-    Column('client_id', Integer, ForeignKey('clients.id', ondelete='CASCADE'), primary_key=True)
+    db.metadata,
+    db.Column('user_id', db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), primary_key=True),
+    db.Column('client_id', db.Integer, db.ForeignKey('clients.id', ondelete='CASCADE'), primary_key=True)
 )
 
-export_items = Table(
+export_items = db.Table(
     'export_items',
-    Base.metadata,
-    Column('export_id', Integer, ForeignKey('exports.id', ondelete='CASCADE'), primary_key=True),
-    Column('payment_id', Integer, ForeignKey('scheduled_payments.id', ondelete='CASCADE'), primary_key=True)
+    db.metadata,
+    db.Column('export_id', db.Integer, db.ForeignKey('exports.id', ondelete='CASCADE'), primary_key=True),
+    db.Column('payment_id', db.Integer, db.ForeignKey('scheduled_payments.id', ondelete='CASCADE'), primary_key=True)
 )
 
 
 # =========================
 # MODELS
 # =========================
-class Firm(Base):
+class Firm(db.Model):
     __tablename__ = 'firms'
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    name = Column(String(255), nullable=False)
-    email = Column(String(255), nullable=False)
-    plan_type = Column(String(50))
-    status = Column(String(50))
-    created_at = Column(DateTime, server_default=func.now())
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    name = db.Column(db.String(255), nullable=False)
+    email = db.Column(db.String(255), nullable=False)
+    plan_type = db.Column(db.String(50))
+    status = db.Column(db.String(50))
+    created_at = db.Column(db.DateTime, server_default=func.now())
 
     # Relationships
-    users = relationship('User', back_populates='firm', cascade='all, delete-orphan')
-    clients = relationship('Client', back_populates='firm', cascade='all, delete-orphan')
-    subscriptions = relationship('Subscription', back_populates='firm', cascade='all, delete-orphan')
+    users = db.relationship('User', back_populates='firm', cascade='all, delete-orphan')
+    clients = db.relationship('Client', back_populates='firm', cascade='all, delete-orphan')
+    subscriptions = db.relationship('Subscription', back_populates='firm', cascade='all, delete-orphan')
 
 
-class Role(Base):
+class Role(db.Model):
     __tablename__ = 'roles'
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    name = Column(String(50), nullable=False, unique=True)
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    name = db.Column(db.String(50), nullable=False, unique=True)
 
     # Relationships
-    users = relationship('User', back_populates='role')
-    permissions = relationship('Permission', secondary=role_permissions, back_populates='roles')
+    users = db.relationship('User', back_populates='role')
+    permissions = db.relationship('Permission', secondary=role_permissions, back_populates='roles')
 
 
-class Permission(Base):
+class Permission(db.Model):
     __tablename__ = 'permissions'
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    name = Column(String(100), nullable=False, unique=True)
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    name = db.Column(db.String(100), nullable=False, unique=True)
 
     # Relationships
-    roles = relationship('Role', secondary=role_permissions, back_populates='permissions')
-    users = relationship('User', secondary=user_permissions, back_populates='permissions')
+    roles = db.relationship('Role', secondary=role_permissions, back_populates='permissions')
+    users = db.relationship('User', secondary=user_permissions, back_populates='permissions')
 
 
-class User(Base):
+class User(db.Model):
     __tablename__ = 'users'
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    firm_id = Column(Integer, ForeignKey('firms.id', ondelete='CASCADE'), nullable=False, index=True)
-    role_id = Column(Integer, ForeignKey('roles.id'), nullable=False)
-    name = Column(String(255), nullable=False)
-    email = Column(String(255), nullable=False, unique=True)
-    password_hash = Column(String(255), nullable=False)
-    is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, server_default=func.now())
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    firm_id = db.Column(db.Integer, db.ForeignKey('firms.id', ondelete='CASCADE'), nullable=False, index=True)
+    role_id = db.Column(db.Integer, db.ForeignKey('roles.id'), nullable=False)
+    name = db.Column(db.String(255), nullable=False)
+    email = db.Column(db.String(255), nullable=False, unique=True)
+    password_hash = db.Column(db.String(255), nullable=False)
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, server_default=func.now())
 
     # Relationships
-    firm = relationship('Firm', back_populates='users')
-    role = relationship('Role', back_populates='users')
-    permissions = relationship('Permission', secondary=user_permissions, back_populates='users')
-    clients = relationship('Client', secondary=client_assignments, back_populates='users')
-    tax_records = relationship('TaxRecord', back_populates='uploaded_by_user')
-    payment_schedules = relationship('PaymentSchedule', back_populates='created_by_user')
-    exports = relationship('Export', back_populates='user')
-    audit_logs = relationship('AuditLog', back_populates='user')
+    firm = db.relationship('Firm', back_populates='users')
+    role = db.relationship('Role', back_populates='users')
+    permissions = db.relationship('Permission', secondary=user_permissions, back_populates='users')
+    clients = db.relationship('Client', secondary=client_assignments, back_populates='users')
+    tax_records = db.relationship('TaxRecord', back_populates='uploaded_by_user')
+    payment_schedules = db.relationship('PaymentSchedule', back_populates='created_by_user')
+    exports = db.relationship('Export', back_populates='user')
+    audit_logs = db.relationship('AuditLog', back_populates='user')
 
 
-class Client(Base):
+class Client(db.Model):
     __tablename__ = 'clients'
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    firm_id = Column(Integer, ForeignKey('firms.id', ondelete='CASCADE'), nullable=False, index=True)
-    name = Column(String(255), nullable=False)
-    email = Column(String(255))
-    phone = Column(String(50))
-    tax_id = Column(String(50))
-    address = Column(Text)
-    created_at = Column(DateTime, server_default=func.now())
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    firm_id = db.Column(db.Integer, db.ForeignKey('firms.id', ondelete='CASCADE'), nullable=False, index=True)
+    name = db.Column(db.String(255), nullable=False)
+    email = db.Column(db.String(255))
+    phone = db.Column(db.String(50))
+    tax_id = db.Column(db.String(50))
+    address = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, server_default=func.now())
 
     # Relationships
-    firm = relationship('Firm', back_populates='clients')
-    users = relationship('User', secondary=client_assignments, back_populates='clients')
-    tax_records = relationship('TaxRecord', back_populates='client', cascade='all, delete-orphan')
+    firm = db.relationship('Firm', back_populates='clients')
+    users = db.relationship('User', secondary=client_assignments, back_populates='clients')
+    tax_records = db.relationship('TaxRecord', back_populates='client', cascade='all, delete-orphan')
 
 
-class TaxRecord(Base):
+class TaxRecord(db.Model):
     __tablename__ = 'tax_records'
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    client_id = Column(Integer, ForeignKey('clients.id', ondelete='CASCADE'), nullable=False, index=True)
-    tax_year = Column(Integer, nullable=False)  # SQLAlchemy doesn't have a native YEAR type universally
-    estimated_tax_total = Column(Numeric(12, 2), nullable=False)
-    upload_source = Column(String(255))
-    uploaded_by = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'))
-    created_at = Column(DateTime, server_default=func.now())
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    client_id = db.Column(db.Integer, db.ForeignKey('clients.id', ondelete='CASCADE'), nullable=False, index=True)
+    tax_year = db.Column(db.Integer, nullable=False)  # SQLAlchemy doesn't have a native YEAR type universally
+    estimated_tax_total = db.Column(db.Numeric(12, 2), nullable=False)
+    upload_source = db.Column(db.String(255))
+    uploaded_by = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'))
+    created_at = db.Column(db.DateTime, server_default=func.now())
 
     # Relationships
-    client = relationship('Client', back_populates='tax_records')
-    uploaded_by_user = relationship('User', back_populates='tax_records')
-    payment_schedules = relationship('PaymentSchedule', back_populates='tax_record', cascade='all, delete-orphan')
+    client = db.relationship('Client', back_populates='tax_records')
+    uploaded_by_user = db.relationship('User', back_populates='tax_records')
+    payment_schedules = db.relationship('PaymentSchedule', back_populates='tax_record', cascade='all, delete-orphan')
 
 
-class PaymentSchedule(Base):
+class PaymentSchedule(db.Model):
     __tablename__ = 'payment_schedules'
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    tax_record_id = Column(Integer, ForeignKey('tax_records.id', ondelete='CASCADE'), nullable=False)
-    schedule_name = Column(String(255))
-    start_date = Column(Date)
-    end_date = Column(Date)
-    frequency = Column(String(50))
-    total_amount = Column(Numeric(12, 2))
-    created_by = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'))
-    created_at = Column(DateTime, server_default=func.now())
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    tax_record_id = db.Column(db.Integer, db.ForeignKey('tax_records.id', ondelete='CASCADE'), nullable=False)
+    schedule_name = db.Column(db.String(255))
+    start_date = db.Column(db.Date)
+    end_date = db.Column(db.Date)
+    frequency = db.Column(db.String(50))
+    total_amount = db.Column(db.Numeric(12, 2))
+    created_by = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'))
+    created_at = db.Column(db.DateTime, server_default=func.now())
 
     # Relationships
-    tax_record = relationship('TaxRecord', back_populates='payment_schedules')
-    created_by_user = relationship('User', back_populates='payment_schedules')
-    scheduled_payments = relationship('ScheduledPayment', back_populates='schedule', cascade='all, delete-orphan')
+    tax_record = db.relationship('TaxRecord', back_populates='payment_schedules')
+    created_by_user = db.relationship('User', back_populates='payment_schedules')
+    scheduled_payments = db.relationship('ScheduledPayment', back_populates='schedule', cascade='all, delete-orphan')
 
 
-class ScheduledPayment(Base):
+class ScheduledPayment(db.Model):
     __tablename__ = 'scheduled_payments'
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    schedule_id = Column(Integer, ForeignKey('payment_schedules.id', ondelete='CASCADE'), nullable=False)
-    due_date = Column(Date, nullable=False, index=True)
-    amount = Column(Numeric(12, 2), nullable=False)
-    status = Column(String(50), default='pending')
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    schedule_id = db.Column(db.Integer, db.ForeignKey('payment_schedules.id', ondelete='CASCADE'), nullable=False)
+    due_date = db.Column(db.Date, nullable=False, index=True)
+    amount = db.Column(db.Numeric(12, 2), nullable=False)
+    status = db.Column(db.String(50), default='pending')
 
     # Relationships
-    schedule = relationship('PaymentSchedule', back_populates='scheduled_payments')
-    exports = relationship('Export', secondary=export_items, back_populates='payments')
+    schedule = db.relationship('PaymentSchedule', back_populates='scheduled_payments')
+    exports = db.relationship('Export', secondary=export_items, back_populates='payments')
 
 
-class Export(Base):
+class Export(db.Model):
     __tablename__ = 'exports'
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'))
-    generated_at = Column(DateTime, server_default=func.now(), index=True)
-    file_path = Column(String(255))
-    status = Column(String(50))
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'))
+    generated_at = db.Column(db.DateTime, server_default=func.now(), index=True)
+    file_path = db.Column(db.String(255))
+    status = db.Column(db.String(50))
 
     # Relationships
-    user = relationship('User', back_populates='exports')
-    payments = relationship('ScheduledPayment', secondary=export_items, back_populates='exports')
+    user = db.relationship('User', back_populates='exports')
+    payments = db.relationship('ScheduledPayment', secondary=export_items, back_populates='exports')
 
 
-class Subscription(Base):
+class Subscription(db.Model):
     __tablename__ = 'subscriptions'
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    firm_id = Column(Integer, ForeignKey('firms.id', ondelete='CASCADE'), nullable=False)
-    plan = Column(String(100))
-    price = Column(Numeric(10, 2))
-    billing_cycle = Column(String(50))
-    start_date = Column(Date)
-    end_date = Column(Date)
-    status = Column(String(50))
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    firm_id = db.Column(db.Integer, db.ForeignKey('firms.id', ondelete='CASCADE'), nullable=False)
+    plan = db.Column(db.String(100))
+    price = db.Column(db.Numeric(10, 2))
+    billing_cycle = db.Column(db.String(50))
+    start_date = db.Column(db.Date)
+    end_date = db.Column(db.Date)
+    status = db.Column(db.String(50))
 
     # Relationships
-    firm = relationship('Firm', back_populates='subscriptions')
-    billing_payments = relationship('BillingPayment', back_populates='subscription', cascade='all, delete-orphan')
+    firm = db.relationship('Firm', back_populates='subscriptions')
+    billing_payments = db.relationship('BillingPayment', back_populates='subscription', cascade='all, delete-orphan')
 
 
-class BillingPayment(Base):
+class BillingPayment(db.Model):
     __tablename__ = 'billing_payments'
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    subscription_id = Column(Integer, ForeignKey('subscriptions.id', ondelete='CASCADE'), nullable=False)
-    amount = Column(Numeric(10, 2))
-    payment_date = Column(DateTime, server_default=func.now())
-    payment_method = Column(String(100))
-    status = Column(String(50))
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    subscription_id = db.Column(db.Integer, db.ForeignKey('subscriptions.id', ondelete='CASCADE'), nullable=False)
+    amount = db.Column(db.Numeric(10, 2))
+    payment_date = db.Column(db.DateTime, server_default=func.now())
+    payment_method = db.Column(db.String(100))
+    status = db.Column(db.String(50))
 
     # Relationships
-    subscription = relationship('Subscription', back_populates='billing_payments')
+    subscription = db.relationship('Subscription', back_populates='billing_payments')
 
 
-class AuditLog(Base):
+class AuditLog(db.Model):
     __tablename__ = 'audit_logs'
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'))
-    action = Column(String(255))
-    entity_type = Column(String(100))
-    entity_id = Column(Integer)
-    ip_address = Column(String(45))
-    timestamp = Column(DateTime, server_default=func.now())
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'))
+    action = db.Column(db.String(255))
+    entity_type = db.Column(db.String(100))
+    entity_id = db.Column(db.Integer)
+    ip_address = db.Column(db.String(45))
+    timestamp = db.Column(db.DateTime, server_default=func.now())
 
     # Relationships
-    user = relationship('User', back_populates='audit_logs')
+    user = db.relationship('User', back_populates='audit_logs')
 
 
-class PermissionLog(Base):
+class PermissionLog(db.Model):
     __tablename__ = 'permission_logs'
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    admin_user_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'))
-    target_user_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'))
-    permission_id = Column(Integer, ForeignKey('permissions.id', ondelete='SET NULL'))
-    action = Column(String(50))
-    timestamp = Column(DateTime, server_default=func.now())
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    admin_user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'))
+    target_user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'))
+    permission_id = db.Column(db.Integer, db.ForeignKey('permissions.id', ondelete='SET NULL'))
+    action = db.Column(db.String(50))
+    timestamp = db.Column(db.DateTime, server_default=func.now())
 
     # Relationships
-    admin_user = relationship('User', foreign_keys=[admin_user_id])
-    target_user = relationship('User', foreign_keys=[target_user_id])
-    permission = relationship('Permission')
+    admin_user = db.relationship('User', foreign_keys=[admin_user_id])
+    target_user = db.relationship('User', foreign_keys=[target_user_id])
+    permission = db.relationship('Permission')

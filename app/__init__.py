@@ -201,25 +201,39 @@ def create_app():
     # Add new client to database
     @app.route('/generate_client', methods=['POST'])
     def generate_client():
-        from .models import Client
+        from .models import Client, Firm
         import uuid
+        
+        #Ensure a Firm exists to own the client
+        test_firm = Firm.query.first()
+        
+        # Create a test firm if needed
+        if not test_firm:
+            test_firm = Firm(
+                name="Kent Tax Strategy Group", 
+                email="admin@kent.edu",
+                status="active"
+            )
+            db.session.add(test_firm)
+            db.session.commit() # Commit so ID is obtainable
         
         # Generate test client
         unique_id = str(uuid.uuid4())[:8]
         new_client = Client(
             name=f"Test-{unique_id}", 
-            email=f"{unique_id}@email.com"
+            email=f"{unique_id}@email.com",
+            firm_id=test_firm.id
         )
         
         # Add client to database
         try:
             db.session.add(new_client)
             db.session.commit()
+            # flash(f"Generated client: {new_client.name}", "success")
         except Exception as e:
             db.session.rollback()
             return f"Database Error: {e}"
         
-        # 3. Redirect back to the test page to see the update
         return redirect(url_for('test_db'))
 
 
