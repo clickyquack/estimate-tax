@@ -11,12 +11,32 @@
 Set-ExecutionPolicy RemoteSigned -Scope Process
 venv\Scripts\activate
 
-# Open test dashboard in browser
-start http://127.0.0.1:5000/test
+# Open index in browser
+start http://127.0.0.1:5000
 
 # Run the app
 python run.py
 ```
+
+
+
+# Using Sample Data
+
+### Run the sample data script
+This will **WIPE THE DATABASE**
+```
+python sample_data.py
+```
+
+### Sample Login Info
+All of these are users with various roles of the same test firm
+| Email | Password |
+| :--- | :--- |
+| developer@test.com | developer |
+| sysadmin@test.com | sysadmin |
+| admin@test.com | admin |
+| accountant1@test.com | accountant |
+| accountant2@test.com | accountant |
 
 
 
@@ -58,11 +78,9 @@ Set-ExecutionPolicy RemoteSigned -Scope Process
 python -m venv venv
 venv\Scripts\activate
 
-# Install software
-pip install Flask 
-pip install Flask-SQLAlchemy
+# (Install Software Here)
 
-# Save requirements
+# Save software requirements
 pip freeze > requirements.txt
 ```
 **Linux/Mac**
@@ -71,11 +89,9 @@ pip freeze > requirements.txt
 python -m venv venv
 source venv/bin/activate
 
-# Install software
-pip install Flask 
-pip install Flask-SQLAlchemy
+# (Install Software Here)
 
-# Save requirements
+# Save software requirements
 pip freeze > requirements.txt
 ```
 

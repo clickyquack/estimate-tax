@@ -5,7 +5,7 @@ class Config:
     # ----------- ENVIRONMENTAL VARIABLES -----------
     # -----------------------------------------------
 
-    # Reference environment variables here like API keys (do not put them in here raw)
+    SECRET_KEY = os.environ.get('SECRET_KEY') or 'development-key-123'
     
 
 

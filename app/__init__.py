@@ -1,8 +1,14 @@
-from flask import Flask, render_template, request, redirect, url_for, flash
+from flask import Flask, render_template, request, redirect, url_for, flash, abort
 from datetime import datetime
 
-from .extensions import db
+from app.models import User
+
+from .extensions import db, login_manager
 from config import Config
+
+from functools import wraps
+from flask_login import current_user, login_required, login_user, logout_user
+
 
 
 def create_app():
@@ -20,6 +26,42 @@ def create_app():
         from . import models
         db.create_all()
 
+    # -----------------------------------
+    # ----------- LOGIN MANAGER ---------
+    # -----------------------------------
+    login_manager.init_app(app)
+    login_manager.login_view = 'login'
+
+
+    # -------------------------------------
+    # ------------ DECORATORS -------------
+    # -------------------------------------
+
+    def developer_required(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            if not current_user.is_authenticated or not current_user.is_developer():
+                abort(403)
+            return f(*args, **kwargs)
+        return decorated_function
+
+    def sysadmin_required(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            if not current_user.is_authenticated or not current_user.is_sysadmin():
+                abort(403)
+            return f(*args, **kwargs)
+        return decorated_function
+    
+    def admin_required(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            if not current_user.is_authenticated or not current_user.is_admin():
+                abort(403)
+            return f(*args, **kwargs)
+        return decorated_function
+    
+    # Then just use @login_required for accountant-level access
 
 
     # -----------------------------------
@@ -34,24 +76,50 @@ def create_app():
     def login():
         return render_template('login.html')
     
-    @app.route('/login_user', methods=['POST'])
-    def login_user():
+    @app.route('/log_user_in', methods=['POST'])
+    def log_user_in():
+        email = request.form.get('email')
+        password = request.form.get('password')
+        remember = True if request.form.get('remember') else False
+        # Find the user
+        user = User.query.filter_by(email=email).first()
+        #Check if user exists and password is correct
+        if not user or not user.check_password(password):
+            flash('Please check your login details and try again.', 'danger')
+            return redirect(url_for('login'))
+        # Log in
+        login_user(user, remember=remember)
+        return redirect(url_for('dashboard'))
+    
+    @app.route('/logout')
+    @login_required
+    def logout():
+        logout_user()
         return redirect(url_for('login'))
     
     @app.route('/dashboard')
+    @login_required
     def dashboard():
         from .models import Client
+
+        if current_user.is_admin():
+            # Admins can see all clients in their firm
+            from .models import Client
+            clients = Client.query.filter_by(firm_id=current_user.firm_id).all()
+        else:
+            # Accounants can only see their clients
+            clients = current_user.clients
         
-        all_clients = Client.query.all() # Query all clients from the database
         now = datetime.now()
         return render_template(
             'dashboard.html',
-            clients=all_clients,
+            clients=clients,
             default_input_date=now.strftime('%m/%d/%Y'),
             default_input_time=now.strftime('%H:%M')
         )
 
     @app.route('/tax-payments', methods=['POST'])
+    @login_required
     def create_tax_payment():
         from .models import Client, TaxPayment
 
@@ -169,10 +237,12 @@ def create_app():
         return redirect(url_for('dashboard'))
     
     @app.route('/admin')
+    @admin_required
     def admin():
         return render_template('admin.html')
     
     @app.route('/sysadmin')
+    @sysadmin_required
     def sysadmin():
         return render_template('sysadmin.html')
 
@@ -184,11 +254,13 @@ def create_app():
     
     # Test route
     @app.route('/test')
+    @developer_required
     def test():
         return render_template('test.html')
 
     # Test database
     @app.route('/test-db')
+    @developer_required
     def test_db():
         from .models import Client
         
@@ -200,29 +272,23 @@ def create_app():
     
     # Add new client to database
     @app.route('/generate_client', methods=['POST'])
+    @developer_required
     def generate_client():
         from .models import Client, Firm
-        import uuid
+        from faker import Faker
+        fake = Faker()
         
-        #Ensure a Firm exists to own the client
-        test_firm = Firm.query.first()
-        
-        # Create a test firm if needed
-        if not test_firm:
-            test_firm = Firm(
-                name="Kent Tax Strategy Group", 
-                email="admin@kent.edu",
-                status="active"
-            )
-            db.session.add(test_firm)
-            db.session.commit() # Commit so ID is obtainable
+        # Use the firm the user is associated with
+        target_firm_id = current_user.firm_id
         
         # Generate test client
-        unique_id = str(uuid.uuid4())[:8]
         new_client = Client(
-            name=f"Test-{unique_id}", 
-            email=f"{unique_id}@email.com",
-            firm_id=test_firm.id
+            name=fake.company(),
+            email=fake.company_email(),
+            phone=fake.phone_number()[:15],
+            tax_id=fake.numerify(text="#########"),
+            address=fake.address(),
+            firm_id=target_firm_id
         )
         
         # Add client to database

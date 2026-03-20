@@ -23,24 +23,39 @@
             
             <div class="collapse navbar-collapse" id="mainNav">
                 <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-                    <li class="nav-item"> <a class="nav-link" href="{{ url_for('dashboard') }}">Dashboard</a> </li>
-                    <li class="nav-item"> <a class="nav-link" href="{{ url_for('admin') }}">Admin</a> </li>
-                    <li class="nav-item"> <a class="nav-link" href="{{ url_for('sysadmin') }}">System Admin</a> </li>
+                    {% if current_user.is_authenticated %}
+                        <li class="nav-item"> <a class="nav-link" href="{{ url_for('dashboard') }}">Dashboard</a> </li>
+                        {% if current_user.is_admin() %}
+                            <li class="nav-item"> <a class="nav-link" href="{{ url_for('admin') }}">Admin</a> </li>
+                        {% endif %}
+                        {% if current_user.is_sysadmin() %}
+                            <li class="nav-item"> <a class="nav-link" href="{{ url_for('sysadmin') }}">System Admin</a> </li>
+                        {% endif %}
+                        {% if current_user.is_developer() %}
+                            <li class="nav-item dropdown">
+                                <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                                    Dev Tools
+                                </a>
+                                <ul class="dropdown-menu dropdown-menu-end">
+                                    <li><a class="dropdown-item" href="{{ url_for('test') }}">Test Dashboard</a></li>
+                                    <li><a class="dropdown-item" href="{{ url_for('test_db') }}">Database Test</a></li>
+                                </ul>
+                            </li>
+                        {% endif %}
+                    {% endif %}
                 </ul>
                 
                 <ul class="navbar-nav ms-auto">
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
-                            Dev Tools
-                        </a>
-                        <ul class="dropdown-menu dropdown-menu-end">
-                            <li><a class="dropdown-item" href="{{ url_for('test') }}">Test Dashboard</a></li>
-                            <li><a class="dropdown-item" href="{{ url_for('test_db') }}">Database Test</a></li>
-                        </ul>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('login') }}">Login</a>
-                    </li>
+                    {% if not current_user.is_authenticated %}
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('login') }}">Login</a>
+                        </li>
+                    {% endif %}
+                    {% if current_user.is_authenticated %}
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('logout') }}">Logout</a>
+                        </li>
+                    {% endif %}
                 </ul>
             </div>
         </div>
