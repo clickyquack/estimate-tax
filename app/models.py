@@ -1,8 +1,10 @@
 from .extensions import db
-from datetime import datetime
-
-from sqlalchemy.orm import declarative_base, relationship
 from sqlalchemy.sql import func
+
+from flask_login import UserMixin
+from werkzeug.security import generate_password_hash, check_password_hash
+
+from .extensions import login_manager
 
 
 
@@ -79,7 +81,7 @@ class Permission(db.Model):
     users = db.relationship('User', secondary=user_permissions, back_populates='permissions')
 
 
-class User(db.Model):
+class User(db.Model, UserMixin):
     __tablename__ = 'users'
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
@@ -100,6 +102,28 @@ class User(db.Model):
     payment_schedules = db.relationship('PaymentSchedule', back_populates='created_by_user')
     exports = db.relationship('Export', back_populates='user')
     audit_logs = db.relationship('AuditLog', back_populates='user')
+
+    # User Functions
+    def set_password(self, password):
+        self.password_hash = generate_password_hash(password)
+
+    def check_password(self, password):
+        return check_password_hash(self.password_hash, password)
+    
+    # Hierarchical role checks
+    def is_developer(self):
+        return self.role.name == 'Developer'
+    def is_sysadmin(self):
+        return (self.role.name == 'SysAdmin' or self.role.name == 'Developer')
+    def is_admin(self):
+        return (self.role.name == 'Admin' or self.role.name == 'SysAdmin' or self.role.name == 'Developer')
+    def is_accountant(self):
+        return (self.role.name == 'Accountant' or self.role.name == 'Admin' or self.role.name == 'SysAdmin' or self.role.name == 'Developer')
+    
+# Flask-Login user loader
+@login_manager.user_loader
+def load_user(user_id):
+    return db.session.get(User, int(user_id))
 
 
 class Client(db.Model):

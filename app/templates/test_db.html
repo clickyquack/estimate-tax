@@ -22,14 +22,31 @@
                             <th class="ps-4">ID</th>
                             <th>Client Name</th>
                             <th>Email Address</th>
+                            <th>Firm</th>
+                            <th>Assigned Accountants</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for client in clients %}
                         <tr>
+                            
                             <td class="ps-4">{{ client.id }}</td>
                             <td class="fw-bold">{{ client.name }}</td>
                             <td>{{ client.email }}</td>
+                            <td>
+                                <span class="ps-4">
+                                    {{ client.firm.name if client.firm else "No Firm" }}
+                                </span>
+                            </td>
+                            <td>
+                                {% if client.users %}
+                                    {% for user in client.users %}
+                                        <div class="ps-4">"{{ user.name }}"</div>
+                                    {% endfor %}
+                                {% else %}
+                                    <span class="ps-4">Unassigned</span>
+                                {% endif %}
+                            </td>
                         </tr>
                         {% else %}
                         <tr>
