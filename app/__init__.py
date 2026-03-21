@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, abort
+from flask import Flask, app, render_template, request, redirect, url_for, flash, abort
 from datetime import datetime
 
 from app.models import User
@@ -84,12 +84,12 @@ def create_app():
         # Find the user
         user = User.query.filter_by(email=email).first()
         #Check if user exists and password is correct
-        if not user or not user.check_password(password):
-            flash('Please check your login details and try again.', 'danger')
+        if user and user.check_password(password):
+            login_user(user, remember=remember)
+            return redirect(url_for('dashboard'))
+        else:
+            flash('Invalid email or password', 'danger')
             return redirect(url_for('login'))
-        # Log in
-        login_user(user, remember=remember)
-        return redirect(url_for('dashboard'))
     
     @app.route('/logout')
     @login_required
@@ -110,10 +110,39 @@ def create_app():
             # Accounants can only see their clients
             clients = current_user.clients
         
+        # Check if a specific client was requested via query parameter
+        selected_id = request.args.get('client_id', type=int)
+        selected_client = None
+        if selected_id:
+            selected_client = db.session.get(Client, selected_id)
+            # Ensure user can view this client
+            if selected_client not in clients and not current_user.is_admin():
+                selected_client = None
+
         now = datetime.now()
         return render_template(
             'dashboard.html',
             clients=clients,
+            selected_client=selected_client,
+            default_input_date=now.strftime('%m/%d/%Y'),
+            default_input_time=now.strftime('%H:%M')
+        )
+    
+    @app.route('/dashboard/client/<int:client_id>')
+    @login_required
+    def get_client_panel(client_id):
+        from .models import Client
+        from datetime import datetime
+        # Fetch the specific client
+        client = db.session.get(Client, client_id)
+        # Check if the user is authorized to view this client
+        if not current_user.is_admin() and client not in current_user.clients:
+            return "<div class='alert alert-danger'>Unauthorized Access</div>", 403
+        # Return the main panel with the selected client's information
+        now = datetime.now()
+        return render_template(
+            'partials/main_panel.html', 
+            client=client,
             default_input_date=now.strftime('%m/%d/%Y'),
             default_input_time=now.strftime('%H:%M')
         )
