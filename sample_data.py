@@ -1,3 +1,5 @@
+# To run: python sample_data.py
+
 import random
 from faker import Faker
 from app import create_app
@@ -82,10 +84,16 @@ def generate_sample_data():
 
         # Clients generated with Faker
         for _ in range(30):
+
+            if random.random() > 0.5:
+                id_format = "##-#######"  # EIN
+            else:
+                id_format = "###-##-####" # SSN`
+                
             client = Client(
-                name=fake.company(),
+                name=fake.company() if id_format == "##-#######" else fake.name(),
                 email=fake.company_email(),
-                tax_id=fake.numerify(text="#########"),
+                tax_id=fake.numerify(text=id_format),
                 firm_id=test_firm.id
             )
             # Randomly assign to either Accountant

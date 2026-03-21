@@ -1,0 +1,54 @@
+<div class="modal-content border-0">
+    <div class="modal-header border-0 pb-0">
+        <h5 class="modal-title fw-bold">Register New Client</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+    </div>
+    <div class="modal-body">
+        <form hx-post="{{ url_for('create_client') }}" hx-target="#modal-content-placeholder">
+
+            {% if error %}
+            <div class="alert alert-danger py-2 small border-0 mb-3">
+                <i class="bi bi-exclamation-triangle-fill me-2"></i> {{ error }}
+            </div>
+            {% endif %}
+
+            <div class="mb-3">
+                <label class="form-label small fw-bold text-muted">Client Name</label>
+                <input type="text" name="name" class="form-control" placeholder="e.g. Smith & Co." required>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label small fw-bold text-muted">Email</label>
+                <input type="email" name="email" class="form-control" placeholder="client@example.com">
+                <div class="form-text small">Optional contact email.</div>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label small fw-bold text-muted">Tax ID (TIN / SSN)</label>
+                <input type="text" name="tax_id" class="form-control font-monospace"
+                    placeholder="00-0000000 or 000-00-0000" pattern="^([0-9]{2}-[0-9]{7}|[0-9]{3}-[0-9]{2}-[0-9]{4})?$"
+                    title="Must be empty, Business (00-0000000), or Individual (000-00-0000)">
+                <div class="form-text small">Optional. Accepts Business EIN or Personal SSN.</div>
+            </div>
+
+            <div class="mb-4">
+                <label class="form-label small fw-bold text-muted">Assign to Accountants</label>
+                <div class="border rounded p-2 bg-light" style="max-height: 120px; overflow-y: auto;">
+                    {% for acc in all_accountants %}
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="accountant_ids" value="{{ acc.id }}"
+                            id="new{{ acc.id }}">
+                        <label class="form-check-label ms-2" for="new{{ acc.id }}">{{ acc.name }}</label>
+                    </div>
+                    {% else %}
+                    <small class="text-muted ps-2">No accountants available.</small>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="d-grid">
+                <button type="submit" class="btn btn-primary">Create Client</button>
+            </div>
+        </form>
+    </div>
+</div>

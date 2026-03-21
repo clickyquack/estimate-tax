@@ -1,0 +1,59 @@
+<div class="modal-content border-0">
+    <div class="modal-header border-0 pb-0">
+        <h5 class="modal-title fw-bold">Manage Client</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+    </div>
+    <div class="modal-body">
+        <form hx-post="{{ url_for('update_client', client_id=client.id) }}" hx-target="#modal-content-placeholder">
+
+            {% if error %}
+            <div class="alert alert-danger py-2 small border-0 mb-3">
+                <i class="bi bi-exclamation-triangle-fill me-2"></i> {{ error }}
+            </div>
+            {% endif %}
+
+            <div class="mb-3">
+                <label class="form-label small fw-bold text-muted">Name</label>
+                <input type="text" name="name" class="form-control" value="{{ client.name }}" required>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label small fw-bold text-muted">Email</label>
+                <input type="email" name="email" class="form-control" value="{{ client.email or '' }}"
+                    placeholder="client@example.com">
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label small fw-bold text-muted">Tax ID (TIN / SSN)</label>
+                <input type="text" name="tax_id" class="form-control font-monospace" value="{{ client.tax_id or '' }}"
+                    placeholder="00-0000000 or 000-00-0000" pattern="^([0-9]{2}-[0-9]{7}|[0-9]{3}-[0-9]{2}-[0-9]{4})?$"
+                    title="Must be empty, Business (00-0000000), or Individual (000-00-0000)">
+            </div>
+
+            <div class="mb-4">
+                <label class="form-label small fw-bold text-muted">Assigned Accountants</label>
+                <div class="border rounded p-2 bg-light" style="max-height: 120px; overflow-y: auto;">
+                    {% for acc in all_accountants %}
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="accountant_ids" value="{{ acc.id }}"
+                            id="edit{{ acc.id }}" {% if acc in client.users %}checked{% endif %}>
+                        <label class="form-check-label ms-2" for="edit{{ acc.id }}">{{ acc.name }}</label>
+                    </div>
+                    {% else %}
+                    <small class="text-muted ps-2">No accountants available.</small>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="d-grid gap-2">
+                <button type="submit" class="btn btn-primary">Save Changes</button>
+
+                <button type="button" class="btn btn-link btn-sm text-danger text-decoration-none mt-2"
+                    hx-delete="{{ url_for('delete_client', client_id=client.id) }}"
+                    hx-confirm="Are you sure? This will permanently delete {{ client.name }}." data-bs-dismiss="modal">
+                    <i class="bi bi-trash3 me-1"></i> Delete Client
+                </button>
+            </div>
+        </form>
+    </div>
+</div>

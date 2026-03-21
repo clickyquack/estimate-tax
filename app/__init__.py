@@ -1,7 +1,5 @@
-from flask import Flask, app, render_template, request, redirect, url_for, flash, abort
+from flask import Flask, app, make_response, render_template, request, redirect, url_for, flash, abort
 from datetime import datetime
-
-from app.models import User
 
 from .extensions import db, login_manager
 from config import Config
@@ -78,6 +76,8 @@ def create_app():
     
     @app.route('/log_user_in', methods=['POST'])
     def log_user_in():
+        from .models import User
+
         email = request.form.get('email')
         password = request.form.get('password')
         remember = True if request.form.get('remember') else False
@@ -270,11 +270,200 @@ def create_app():
 
         return redirect(url_for('dashboard'))
     
+    # ------- ADMIN ROUTES -------
     @app.route('/admin')
     @admin_required
     def admin():
-        return render_template('admin.html')
+        from .models import Client, User, Role
+
+        clients = Client.query.filter_by(firm_id=current_user.firm_id).all()
+        accountants = User.query.filter(
+            User.role.has(Role.name == 'Accountant'), 
+            User.firm_id == current_user.firm_id
+        ).all()
+        return render_template('admin.html', clients=clients, accountants=accountants)
     
+    # --- ADMIN: Client Management ---
+    @app.route('/admin/client/<int:client_id>/edit', methods=['GET'])
+    @admin_required
+    def edit_client(client_id):
+        from .models import Client, User, Role
+
+        
+        client = Client.query.get_or_404(client_id)
+        if client.firm_id != current_user.firm_id:
+            return "Forbidden", 403
+        # Get all accountants in the firm
+        all_accountants = User.query.filter(
+            User.role.has(Role.name == 'Accountant'), 
+            User.firm_id == current_user.firm_id
+        ).all()
+        return render_template('partials/edit_client_form.html', 
+                            client=client, 
+                            all_accountants=all_accountants)
+    
+    @app.route('/admin/client/<int:client_id>/update', methods=['POST'])
+    @admin_required
+    def update_client(client_id):
+        from .models import Client, User
+        from flask import make_response
+
+        client = Client.query.get_or_404(client_id)
+        if client.firm_id != current_user.firm_id:
+            return "Forbidden", 403
+        # Update info
+        client.name = request.form.get('name')
+        client.email = request.form.get('email')
+        client.tax_id = request.form.get('tax_id')
+        # Update Assignments
+        selected_accountant_ids = request.form.getlist('accountant_ids')
+        selected_users = User.query.filter(User.id.in_(selected_accountant_ids)).all()
+        client.users = selected_users
+        db.session.commit()
+        response = make_response("", 200)
+        response.headers['HX-Refresh'] = 'true'
+        return response
+
+    @app.route('/admin/client/<int:client_id>', methods=['DELETE'])
+    @admin_required
+    def delete_client(client_id):
+        from .models import Client
+
+        client = Client.query.get_or_404(client_id)
+        if client.firm_id != current_user.firm_id:
+            return "Forbidden", 403
+        # Delete the client
+        db.session.delete(client)
+        db.session.commit()
+        response = make_response("", 200)
+        response.headers['HX-Refresh'] = 'true'
+        return response
+    
+    @app.route('/admin/client/add', methods=['GET'])
+    @admin_required
+    def add_client_form():
+        from .models import User, Role
+
+        all_accountants = User.query.filter(User.role.has(Role.name == 'Accountant'), User.firm_id == current_user.firm_id).all()
+        return render_template('partials/add_client_form.html', all_accountants=all_accountants)
+
+    @app.route('/admin/client/create', methods=['POST'])
+    @admin_required
+    def create_client():
+        from .models import Client, User
+
+        new_client = Client(
+            name=request.form.get('name'),
+            email=request.form.get('email'),
+            tax_id=request.form.get('tax_id'),
+            firm_id=current_user.firm_id
+        )
+    
+        selected_ids = request.form.getlist('accountant_ids')
+        new_client.users = User.query.filter(User.id.in_(selected_ids)).all()
+        db.session.add(new_client)
+        db.session.commit()
+        response = make_response("", 200)
+        response.headers['HX-Refresh'] = 'true'
+        return response
+    
+    # --- ADMIN: Accountant Management ---
+    @app.route('/admin/accountant/<int:user_id>/edit', methods=['GET'])
+    @admin_required
+    def edit_accountant(user_id):
+        from .models import User
+
+        accountant = User.query.get_or_404(user_id)
+        if accountant.firm_id != current_user.firm_id:
+            return "Forbidden", 403
+        return render_template('partials/edit_accountant_form.html', accountant=accountant)
+
+    @app.route('/admin/accountant/<int:user_id>/update', methods=['POST'])
+    @admin_required
+    def update_accountant(user_id):
+        from .models import User
+
+        # Integrity check
+        accountant = User.query.get_or_404(user_id)
+        new_email = request.form.get('email')
+        existing_user = User.query.filter_by(email=new_email).first()
+        if existing_user and existing_user.id != accountant.id:
+            return render_template('partials/edit_accountant_form.html', 
+                               accountant=accountant, 
+                               error="This email is already taken.")
+        # Update
+        accountant = User.query.get_or_404(user_id)
+        if accountant.firm_id != current_user.firm_id:
+            return "Forbidden", 403
+        accountant.name = request.form.get('name')
+        accountant.email = request.form.get('email')
+        accountant.is_active = 'is_active' in request.form
+        new_password = request.form.get('new_password')
+        if new_password and len(new_password) >= 8:
+            accountant.set_password(new_password)
+        db.session.commit()
+        response = make_response("", 200)
+        response.headers['HX-Refresh'] = 'true'
+        return response
+
+    @app.route('/admin/accountant/<int:user_id>', methods=['DELETE'])
+    @admin_required
+    def delete_accountant(user_id):
+        from .models import User
+        from flask import make_response
+        
+        accountant = User.query.get_or_404(user_id)
+        if accountant.firm_id != current_user.firm_id:
+            return "Forbidden", 403
+        db.session.delete(accountant)
+        db.session.commit()
+        response = make_response("", 200)
+        response.headers['HX-Refresh'] = 'true'
+        return response
+    
+    @app.route('/admin/accountant/add', methods=['GET'])
+    @admin_required
+    def add_accountant_form():
+        return render_template('partials/add_accountant_form.html')
+    
+    @app.route('/admin/accountant/create', methods=['POST'])
+    @admin_required
+    def create_accountant():
+        from .models import User, Role
+        from flask import make_response, render_template, request
+
+        # Integrity Check
+        name = request.form.get('name')
+        email = request.form.get('email')
+        password = request.form.get('password')
+        existing_user = User.query.filter_by(email=email).first()
+        if existing_user:
+            return render_template('partials/add_accountant_form.html', 
+                                error=f"Email {email} is already in use.")
+        #Create and Save
+        new_acc = User(
+            name=name,
+            email=email,
+            firm_id=current_user.firm_id,
+            is_active=True
+        )
+        # Assign Role
+        acc_role = Role.query.filter_by(name='Accountant').first()
+        new_acc.role = acc_role
+        # Hash Password
+        new_acc.set_password(password)
+        try:
+            db.session.add(new_acc)
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            return "Internal Server Error", 500
+        response = make_response("", 200)
+        response.headers['HX-Refresh'] = 'true'
+        return response
+
+
+    # ------- SYSADMIN ROUTES -------
     @app.route('/sysadmin')
     @sysadmin_required
     def sysadmin():

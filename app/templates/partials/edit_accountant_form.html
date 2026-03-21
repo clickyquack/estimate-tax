@@ -1,0 +1,61 @@
+<div class="modal-header border-0 pb-0">
+    <h5 class="modal-title fw-bold">Edit Accountant</h5>
+    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+</div>
+<div class="modal-body">
+    <form hx-post="{{ url_for('update_accountant', user_id=accountant.id) }}" hx-target="#modal-content-placeholder">
+
+        {% if error %}
+        <div class="alert alert-danger d-flex align-items-center small py-2 border-0 mb-3" role="alert">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+            <div>{{ error }}</div>
+        </div>
+        {% endif %}
+
+        <div class="mb-3">
+            <label class="form-label small fw-bold text-muted">Name</label>
+            <input type="text" name="name" class="form-control" value="{{ accountant.name }}" required
+                placeholder="e.g. John Doe">
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label small fw-bold text-muted">Email Address</label>
+            <input type="email" name="email" class="form-control" value="{{ accountant.email }}" required
+                placeholder="">
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label small fw-bold text-muted">Reset Password</label>
+            <div class="input-group">
+                <span class="input-group-text bg-light border-end-0">
+                    <i class="bi bi-key"></i>
+                </span>
+                <input type="password" name="new_password" class="form-control border-start-0"
+                    placeholder="Leave blank to keep current password" minlength="8" autocomplete="new-password">
+            </div>
+            <div class="form-text small">Password must be at least 8 characters long.</div>
+        </div>
+
+        <div class="mb-4">
+            <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" name="is_active" id="activeSwitch" {% if
+                    accountant.is_active %}checked{% endif %}>
+                <label class="form-check-label ms-2 fw-bold" for="activeSwitch">Active Account</label>
+            </div>
+            <small class="text-muted d-block mt-1">
+                Deactivating prevents login but preserves their client history.
+            </small>
+        </div>
+
+        <div class="d-grid gap-2">
+            <button type="submit" class="btn btn-primary">Save Changes</button>
+
+            <button type="button" class="btn btn-link btn-sm text-danger text-decoration-none mt-2"
+                hx-delete="{{ url_for('delete_accountant', user_id=accountant.id) }}"
+                hx-confirm="Permanently remove {{ accountant.name }}? Their assigned clients will become unassigned."
+                data-bs-dismiss="modal">
+                <i class="bi bi-person-x me-1"></i> Remove Accountant
+            </button>
+        </div>
+    </form>
+</div>
