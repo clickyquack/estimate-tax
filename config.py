@@ -1,3 +1,4 @@
+from datetime import timedelta
 import os
 
 class Config:
@@ -7,7 +8,8 @@ class Config:
 
     SECRET_KEY = os.environ.get('SECRET_KEY') or 'development-key-123'
     
-
+    REMEMBER_COOKIE_DURATION = timedelta(days=7)
+    SESSION_PROTECTION = 'basic'
 
     # --------------------------------
     # ----------- DATABASE -----------

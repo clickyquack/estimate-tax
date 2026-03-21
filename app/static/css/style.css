@@ -33,12 +33,6 @@ body {
     border: 0px solid var(--border-color);
     border-radius: 0px;
 }
-.client-selector *:hover {
-    background-color: var(--background-color);
-}
-.client-selector *:focus {
-    background-color: var(--background-color-dark);
-}
 .client-selector .input-group input {
     border-bottom: 1px solid var(--border-color);
 }
