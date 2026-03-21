@@ -128,6 +128,11 @@ def create_app():
             default_input_time=now.strftime('%H:%M')
         )
     
+    @app.route('/dashboard/overview')
+    @login_required
+    def get_overview_panel():
+        return render_template('partials/overview_panel.html')
+
     @app.route('/dashboard/client/<int:client_id>')
     @login_required
     def get_client_panel(client_id):
