@@ -98,8 +98,9 @@ def create_app():
         return redirect(url_for('login'))
     
     @app.route('/dashboard')
+    @app.route('/dashboard/client/<int:client_id>')
     @login_required
-    def dashboard():
+    def dashboard(client_id=None):
         from .models import Client
 
         if current_user.is_admin():
@@ -111,7 +112,7 @@ def create_app():
             clients = current_user.clients
         
         # Check if a specific client was requested via query parameter
-        selected_id = request.args.get('client_id', type=int)
+        selected_id = client_id or request.args.get('client_id', type=int)
         selected_client = None
         if selected_id:
             selected_client = db.session.get(Client, selected_id)
@@ -120,11 +121,13 @@ def create_app():
                 selected_client = None
 
         now = datetime.now()
+        iso_date_string = now.strftime('%Y-%m-%d')
         return render_template(
             'dashboard.html',
             clients=clients,
+            client=selected_client,
             selected_client=selected_client,
-            default_input_date=now.strftime('%m/%d/%Y'),
+            default_input_date=iso_date_string,
             default_input_time=now.strftime('%H:%M')
         )
     
@@ -133,7 +136,7 @@ def create_app():
     def get_overview_panel():
         return render_template('partials/overview_panel.html')
 
-    @app.route('/dashboard/client/<int:client_id>')
+    @app.route('/get-client-partial/<int:client_id>')
     @login_required
     def get_client_panel(client_id):
         from .models import Client
@@ -145,130 +148,93 @@ def create_app():
             return "<div class='alert alert-danger'>Unauthorized Access</div>", 403
         # Return the main panel with the selected client's information
         now = datetime.now()
+        iso_date_string = now.strftime('%Y-%m-%d')
         return render_template(
             'partials/main_panel.html', 
             client=client,
-            default_input_date=now.strftime('%m/%d/%Y'),
+            default_input_date=iso_date_string,
             default_input_time=now.strftime('%H:%M')
         )
 
     @app.route('/tax-payments', methods=['POST'])
     @login_required
     def create_tax_payment():
-        from .models import Client, TaxPayment
+        from .models import Client, TaxRecord, ScheduledPayment, PaymentSchedule
 
+        # Verification & Client Lookup
         client_id = request.form.get('client_id', '').strip()
         if not client_id or not client_id.isdigit():
-            flash('Please select a valid client before saving tax data.', 'danger')
-            return redirect(url_for('dashboard'))
+            response = make_response('<div class="alert alert-danger">Please select a valid client.</div>', 200)
+            return response
 
-        client = Client.query.get(int(client_id))
-        if client is None:
-            flash('Selected client does not exist.', 'danger')
-            return redirect(url_for('dashboard'))
+        client = Client.query.get_or_404(int(client_id))
 
-        tin = request.form.get('tin', '').strip()
-        taxpayer_type_code = request.form.get('taxpayer_type_code', '').strip().upper()
-        eft_number = request.form.get('eft_number', '').strip()
-        tax_form = request.form.get('tax_form', '').strip()
-        tax_type = request.form.get('tax_type', '').strip()
+        # Data Extraction
+        amount = request.form.get('total_payment_amount', '0')
+        tax_year = request.form.get('tax_period', '')[:4] # Extract YYYY from YYYYMM
+        settlement_date = request.form.get('settlement_date', '')
         tax_period = request.form.get('tax_period', '').strip()
-        total_payment_amount = request.form.get('total_payment_amount', '').strip()
-        settlement_date = request.form.get('settlement_date', '').strip()
-        payment_input_method = request.form.get('payment_input_method', '').strip().upper()
 
-        if not (tin.isdigit() and len(tin) == 9):
-            flash('TIN (SSN/EIN) must be exactly 9 digits.', 'danger')
-            return redirect(url_for('dashboard'))
-
-        if taxpayer_type_code not in {'I', 'B'}:
-            flash('Taxpayer Type Code must be I (individual) or B (business).', 'danger')
-            return redirect(url_for('dashboard'))
-
-        if not (eft_number.isdigit() and len(eft_number) == 15):
-            flash('EFT Number must be exactly 15 digits.', 'danger')
-            return redirect(url_for('dashboard'))
-
-        if not tax_form:
-            flash('Tax Form is required.', 'danger')
-            return redirect(url_for('dashboard'))
-
-        if not tax_type:
-            flash('Tax Type is required.', 'danger')
-            return redirect(url_for('dashboard'))
-
-        if not tax_period:
-            flash('Tax Period is required.', 'danger')
-            return redirect(url_for('dashboard'))
-
-        if len(tax_period) not in {4, 6} or not tax_period.isdigit():
-            flash('Tax Period must be YYYY or YYYYMM.', 'danger')
-            return redirect(url_for('dashboard'))
-
+        # Validation Logic
         try:
-            amount = float(total_payment_amount)
-            if amount <= 0:
-                raise ValueError()
+            payment_amount = float(amount)
+            settle_date_obj = datetime.strptime(settlement_date, '%Y-%m-%d').date()
         except ValueError:
-            flash('Total Payment Amount must be a valid number greater than 0.', 'danger')
-            return redirect(url_for('dashboard'))
+            response = make_response('<div class="alert alert-danger">Check your date/amount format.</div>', 200)
+            return response
 
+        # Save to Database
         try:
-            settlement_date_value = datetime.strptime(settlement_date, '%m/%d/%Y').date()
-        except ValueError:
-            flash('Settlement Date must be in MM/DD/YYYY format.', 'danger')
-            return redirect(url_for('dashboard'))
+            # Create the Record
+            new_record = TaxRecord(
+                client_id=client.id,
+                tax_year=int(tax_year) if tax_year.isdigit() else 2026,
+                estimated_tax_total=payment_amount,
+                uploaded_by=current_user.id,
+                tax_form=request.form.get('tax_form', '1040'),
+                tax_type_code=request.form.get('tax_type', 'ES'),
+                taxpayer_type=request.form.get('taxpayer_type_code', 'I'),
+                description=request.form.get('tax_form_description', '').strip() or None
+            )
+            db.session.add(new_record)
+            db.session.flush()
 
-        now = datetime.now()
-        input_date_raw = request.form.get('input_date', '').strip() or now.strftime('%m/%d/%Y')
-        input_time_raw = request.form.get('input_time', '').strip() or now.strftime('%H:%M')
-        input_date_value = None
-        input_time_value = None
+            new_schedule = PaymentSchedule(tax_record_id=new_record.id, schedule_name="Unspecified")
+            db.session.add(new_schedule)
+            db.session.flush()
 
-        try:
-            input_date_value = datetime.strptime(input_date_raw, '%m/%d/%Y').date()
-        except ValueError:
-            flash('Input Date must be in MM/DD/YYYY format.', 'danger')
-            return redirect(url_for('dashboard'))
+            # Create the Payment
+            new_payment = ScheduledPayment(
+                schedule_id=new_schedule.id,
+                due_date=settle_date_obj,
+                amount=payment_amount,
+                status='pending',
+                eft_number=request.form.get('eft_number', '').strip(),
+                tax_period=tax_period,
+                input_method=request.form.get('payment_input_method', 'B'),
 
-        try:
-            input_time_value = datetime.strptime(input_time_raw, '%H:%M').time()
-        except ValueError:
-            flash('Input Time must be in HH:MM (24-hour) format.', 'danger')
-            return redirect(url_for('dashboard'))
-
-        new_payment = TaxPayment(
-            amount=amount,
-            tin=tin,
-            taxpayer_type_code=taxpayer_type_code,
-            eft_number=eft_number,
-            original_eft_number=request.form.get('original_eft_number', '').strip() or None,
-            cancellation_eft_number=request.form.get('cancellation_eft_number', '').strip() or None,
-            bulk_debit_trace_number=request.form.get('bulk_debit_trace_number', '').strip() or None,
-            bulk_debit_cancellation_number=request.form.get('bulk_debit_cancellation_number', '').strip() or None,
-            payment_input_method=payment_input_method or None,
-            tax_form=tax_form,
-            tax_form_description=request.form.get('tax_form_description', '').strip() or None,
-            tax_type=tax_type,
-            tax_period=tax_period,
-            settlement_date=settlement_date_value,
-            ach_trace_number=request.form.get('ach_trace_number', '').strip() or None,
-            payment_status=request.form.get('payment_status', '').strip() or None,
-            transaction_code=request.form.get('transaction_code', '').strip() or None,
-            input_date=input_date_value,
-            input_time=input_time_value,
-            client_id=client.id
-        )
-
-        try:
+                original_eft_number=request.form.get('original_eft_number', '').strip() or None,
+                cancellation_eft_number=request.form.get('cancellation_eft_number', '').strip() or None,
+                bulk_debit_trace_number=request.form.get('bulk_debit_trace_number', '').strip() or None,
+                bulk_debit_cancellation_number=request.form.get('bulk_debit_cancellation_number', '').strip() or None,
+                ach_trace_number=request.form.get('ach_trace_number', '').strip() or None,
+                transaction_code=request.form.get('transaction_code', '').strip() or None,
+                input_date=datetime.strptime(request.form.get('input_date'), '%Y-%m-%d').date(),
+                input_time=datetime.strptime(request.form.get('input_time'), '%H:%M').time(),
+                payment_status=request.form.get('payment_status'),
+            )
+            
             db.session.add(new_payment)
             db.session.commit()
-            flash(f'Tax data saved for {client.name}.', 'success')
+            success_html = f'<div class="alert alert-success">Tax data saved for {client.name}</div>'
+            response = make_response(success_html, 200)
+            return response
+
         except Exception as e:
             db.session.rollback()
-            flash(f'Unable to save tax data: {e}', 'danger')
-
-        return redirect(url_for('dashboard'))
+            # response = make_response(f'<div class="alert alert-danger border-0 shadow-sm"><strong>Database Error:</strong> {str(e)}</div>', 200) # Detailed error for debugging
+            response = make_response(f'<div class="alert alert-danger border-0 shadow-sm"><strong>Invalid Input:</strong> Please check your entries and try again.</div>', 200)
+            return response
     
     # ------- ADMIN ROUTES -------
     @app.route('/admin')

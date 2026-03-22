@@ -46,6 +46,12 @@ body {
 }
 
 
+label.form-label:has(+ .form-control[required], + .form-select[required])::after {
+    content: " *";
+    color: #dc3545; /* Bootstrap 'danger' red */
+    font-weight: bold;
+}
+
 
 @media (min-width: 768px) {
     .offcanvas-collapse {
