@@ -19,20 +19,19 @@
         <div class="card h-100 border-0 shadow-sm p-4">
             <div class="card-body">
                 <h2 class="fw-bold text-center">Input Client Tax Data</h2>
-                <h5 class="card-title text-muted text-center">Select a client on the left, then enter tax payment
-                    details.</h5>
+                <h5 class="card-title text-muted text-center">Enter tax payment details.</h5>
 
-                {% with messages = get_flashed_messages(with_categories=true) %}
-                {% if messages %}
-                <div class="mb-3">
+                <div id="message-container">
+                    {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
                     {% for category, message in messages %}
                     <div class="alert alert-{{ category }} mb-2">{{ message }}</div>
                     {% endfor %}
+                    {% endif %}
+                    {% endwith %}
                 </div>
-                {% endif %}
-                {% endwith %}
 
-                <form method="POST" action="{{ url_for('create_tax_payment') }}" id="clientTaxDataForm">
+                <form hx-post="{{ url_for('create_tax_payment') }}" hx-target="#message-container" id="clientTaxDataForm">
                     <input type="hidden" id="selectedClientId" name="client_id" value="{{ client.id }}">
 
                     <div class="mb-3">
@@ -43,13 +42,15 @@
                     <div class="row g-3">
                         <div class="col-md-4">
                             <label for="tin" class="form-label">TIN (SSN/EIN)</label>
-                            <input type="text" id="tin" name="tin" class="form-control" required pattern="\d{9}"
-                                maxlength="9" placeholder="9 digits">
-                        </div>
+                            <input type="text" id="tin" name="tin" class="form-control" value="{{ client.tax_id or '' }}"
+                                pattern="^([0-9]{2}-[0-9]{7}|[0-9]{3}-[0-9]{2}-[0-9]{4})?$" placeholder="00-0000000 or 000-00-0000">
+                            </div>
                         <div class="col-md-4">
-                            <label for="taxpayer_type_code" class="form-label">Taxpayer Type Code</label>
-                            <input type="text" id="taxpayer_type_code" name="taxpayer_type_code" class="form-control"
-                                required maxlength="1" placeholder="I or B">
+                            <label for="taxpayer_type_code" class="form-label">Taxpayer Type</label>
+                            <select id="taxpayer_type_code" name="taxpayer_type_code" class="form-select" required>
+                                <option value="I">I (Individual)</option>
+                                <option value="B">B (Business)</option>
+                            </select>
                         </div>
                         <div class="col-md-4">
                             <label for="eft_number" class="form-label">EFT Number</label>
@@ -101,7 +102,7 @@
                         </div>
                         <div class="col-md-3">
                             <label for="tax_period" class="form-label">Tax Period</label>
-                            <input type="text" id="tax_period" name="tax_period" class="form-control" required
+                            <input type="text" id="tax_period" name="tax_period" class="form-control" required pattern="^(\d{4}|\d{6})$" maxlength="6"
                                 placeholder="YYYY or YYYYMM">
                         </div>
 
@@ -112,8 +113,7 @@
                         </div>
                         <div class="col-md-4">
                             <label for="settlement_date" class="form-label">Settlement Date</label>
-                            <input type="text" id="settlement_date" name="settlement_date" class="form-control" required
-                                placeholder="MM/DD/YYYY">
+                            <input type="date" id="settlement_date" name="settlement_date" class="form-control" required>
                         </div>
                         <div class="col-md-4">
                             <label for="ach_trace_number" class="form-label">ACH Trace Number</label>
@@ -133,13 +133,13 @@
                         </div>
                         <div class="col-md-2">
                             <label for="input_date" class="form-label">Input Date</label>
-                            <input type="text" id="input_date" name="input_date" class="form-control"
-                                value="{{ default_input_date }}" placeholder="MM/DD/YYYY">
+                            <input type="date" id="input_date" name="input_date" class="form-control"
+                                value="{{ default_input_date }}">
                         </div>
                         <div class="col-md-2">
                             <label for="input_time" class="form-label">Input Time</label>
-                            <input type="text" id="input_time" name="input_time" class="form-control"
-                                value="{{ default_input_time }}" placeholder="HH:MM">
+                            <input type="time" id="input_time" name="input_time" class="form-control"
+                                value="{{ default_input_time }}">
                         </div>
                     </div>
 

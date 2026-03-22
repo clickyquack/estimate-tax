@@ -1,0 +1,58 @@
+<div class="modal-content border-0">
+    <div class="modal-header border-0 pb-0">
+        <h5 class="modal-title fw-bold">Register New Accountant</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+    </div>
+    <div class="modal-body">
+        <form hx-post="{{ url_for('create_accountant') }}" hx-target="#modal-content-placeholder" autocomplete="off">
+
+            {% if error %}
+            <div class="alert alert-danger py-2 small border-0 mb-3">
+                <i class="bi bi-exclamation-triangle-fill me-2"></i> {{ error }}
+            </div>
+            {% endif %}
+
+            <div class="mb-3">
+                <label class="form-label small fw-bold text-muted">Full Name</label>
+                <input type="text" name="name" class="form-control" placeholder="e.g. John Doe" required>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label small fw-bold text-muted">Email Address</label>
+                <input type="email" name="email" class="form-control" placeholder="" required>
+            </div>
+
+            <div class="mb-4">
+                <label class="form-label small fw-bold text-muted">Set Initial Password</label>
+                <div class="input-group">
+                    <span class="input-group-text bg-light border-end-0">
+                        <i class="bi bi-shield-lock"></i>
+                    </span>
+                    <input type="password" id="new_acc_pass" name="password" class="form-control border-start-0"
+                        placeholder="Minimum 8 characters" required minlength="8" autocomplete="new-password">
+                    <button class="btn btn-outline-secondary" type="button" onclick="togglePasswordVisibility()">
+                        <i class="bi bi-eye" id="toggleIcon"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div class="d-grid">
+                <button type="submit" class="btn btn-primary">Create Accountant</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    function togglePasswordVisibility() {
+        const passInput = document.getElementById('new_acc_pass');
+        const icon = document.getElementById('toggleIcon');
+        if (passInput.type === 'password') {
+            passInput.type = 'text';
+            icon.classList.replace('bi-eye', 'bi-eye-slash');
+        } else {
+            passInput.type = 'password';
+            icon.classList.replace('bi-eye-slash', 'bi-eye');
+        }
+    }
+</script>

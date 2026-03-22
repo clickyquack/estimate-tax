@@ -23,6 +23,7 @@
                             hx-get="{{ url_for('get_overview_panel') }}"
                             hx-target="#main-panel"
                             hx-swap="innerHTML"
+                            hx-push-url="{{ url_for('dashboard') }}"
                             hx-on:click="document.querySelectorAll('#clientList .list-group-item').forEach(el => el.classList.remove('active'))">
                         Overview
                     </button>
@@ -36,10 +37,11 @@
                     <div class="list-group list-group-flush client-list" id="clientList">
                         {% for client in clients %}
                         <button type="button" 
-                                class="list-group-item list-group-item-action"
-                                hx-get="{{ url_for('get_client_panel', client_id=client.id) }}"
+                                class="list-group-item list-group-item-action {% if selected_client and selected_client.id == client.id %}active{% endif %}"
+                                hx-get="/get-client-partial/{{ client.id }}"
                                 hx-target="#main-panel"
                                 hx-swap="innerHTML"
+                                hx-push-url="/dashboard/client/{{ client.id }}"
                                 hx-on:click="document.querySelectorAll('.list-group-item').forEach(el => el.classList.remove('active')); this.classList.add('active')">
                             {{ client.name }}
                         </button>
@@ -56,8 +58,8 @@
             <!-- Main Panel -->
             <main class="col-md-9 col-lg-10 p-4" id="main-panel">
                 <!-- Everything in here will get dynamically replaced using HTMX -->
-                 {% if selected_client %}
-                    {% include 'partials/main_panel.html' %}
+                {% if selected_client %}
+                    {% include 'partials/main_panel.html' with context %}
                 {% else %}
                     {% include 'partials/overview_panel.html' %}
                 {% endif %}

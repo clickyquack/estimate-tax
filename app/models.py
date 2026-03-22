@@ -154,6 +154,12 @@ class TaxRecord(db.Model):
     upload_source = db.Column(db.String(255))
     uploaded_by = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'))
     created_at = db.Column(db.DateTime, server_default=func.now())
+    
+    # --- Added field ---
+    tax_form = db.Column(db.String(10), nullable=False)
+    tax_type_code = db.Column(db.String(5), nullable=False)
+    taxpayer_type = db.Column(db.String(1), nullable=False)
+    description = db.Column(db.String(255))
 
     # Relationships
     client = db.relationship('Client', back_populates='tax_records')
@@ -184,10 +190,24 @@ class ScheduledPayment(db.Model):
     __tablename__ = 'scheduled_payments'
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    schedule_id = db.Column(db.Integer, db.ForeignKey('payment_schedules.id', ondelete='CASCADE'), nullable=False)
+    schedule_id = db.Column(db.Integer, db.ForeignKey('payment_schedules.id', ondelete='CASCADE'))
     due_date = db.Column(db.Date, nullable=False, index=True)
     amount = db.Column(db.Numeric(12, 2), nullable=False)
     status = db.Column(db.String(50), default='pending')
+    
+    # --- Added field ---
+    eft_number = db.Column(db.String(15), nullable=False)
+    tax_period = db.Column(db.String(6), nullable=False)
+    input_method = db.Column(db.String(1), nullable=False)
+    original_eft_number = db.Column(db.String(15))
+    cancellation_eft_number = db.Column(db.String(15))
+    bulk_debit_trace_number = db.Column(db.String(50))
+    bulk_debit_cancellation_number = db.Column(db.String(50))
+    ach_trace_number = db.Column(db.String(50))
+    transaction_code = db.Column(db.String(10))
+    input_date = db.Column(db.Date, server_default=func.current_date())
+    input_time = db.Column(db.Time, server_default=func.current_time())
+    payment_status = db.Column(db.String(50))
 
     # Relationships
     schedule = db.relationship('PaymentSchedule', back_populates='scheduled_payments')
