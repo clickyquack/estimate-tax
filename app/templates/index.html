@@ -5,21 +5,92 @@
 {% block styles %}{% endblock %}
 
 {% block content %}
-    <div class="container">
-        <div class="row align-items-center py-5">
-            <div class="col-lg-6">
-                <h1 class="display-4 fw-bold mb-3">This is the index.</h1>
-                <p class="lead text-muted mb-4">Put some stuff here that tells people what it is probably.</p>
-                <div class="d-grid gap-2 d-md-flex justify-content-md-start">
-                    <a href="{{ url_for('dashboard') }}" class="btn btn-primary btn-lg px-4 me-md-2">Get Started</a>
-                    <a href="#" class="btn btn-outline-secondary btn-lg px-4">How it works</a>
+<!-- Hero Section -->
+<div class="container py-5 my-5">
+    <div class="row align-items-center g-5">
+
+        <!-- Left Column -->
+        <div class="col-lg-7">
+            <div class="card border-0 shadow-lg p-4 p-md-5 rounded-4">
+                <div class="card-body">
+                    <h1 class="display-3 fw-bold lh-1 mb-4 text-dark">Tax Payments, Simplified.</h1>
+                    <p class="lead text-muted mb-5 fs-4">
+                        A dedicated workspace for accountants to visualize, schedule, and manage client tax payments.
+                    </p>
+                    <div class="d-grid gap-3 d-md-flex justify-content-md-start">
+                        <a href="{{ url_for('dashboard') }}" class="btn btn-primary btn-lg px-5 py-3 shadow-sm rounded-pill">
+                            Get Started
+                        </a>
+                        <a href="#features" class="btn btn-outline-dark btn-lg px-4 py-3 shadow-sm rounded-pill">
+                            Explore Features <i class="bi bi-arrow-down ms-1"></i>
+                        </a>
+                    </div>
                 </div>
             </div>
-            <div class="col-lg-6 d-none d-lg-block">
-                <p class="text-center">Cool image here</p>
+        </div>
+        
+        <!-- Right Column -->
+        <div class="col-lg-5">
+            <div class="position-relative">
+                <div class="p-5 bg-white border rounded-4 shadow-lg overflow-hidden">
+
+                    <img src="{{ url_for('static', filename='images/dashboard-preview.png') }}" alt="Dashboard Preview" class="img-fluid rounded-4">
+                </div>
             </div>
         </div>
     </div>
+</div>
+
+<div class="container" id="features">
+    <hr class="opacity-10">
+</div>
+
+<!-- Features Section -->
+<div class="container py-5 mb-5" id="features">
+    <div class="row g-4 py-5">
+        <div class="col-md-4">
+            <div class="card h-100 border-0 shadow-sm p-4">
+                <div class="card-body">
+                    <div class="mb-3 text-primary">
+                        <i class="bi bi-grid-1x2 fs-1"></i>
+                    </div>
+                    <h4 class="fw-bold card-title">Centralized Dashboard</h4>
+                    <p class="text-muted card-text">
+                        View all your clients' tax payment information in one place. Streamline your workflow with real-time data integration.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card h-100 border-0 shadow-sm p-4">
+                <div class="card-body">
+                    <div class="mb-3 text-primary">
+                        <i class="bi bi-shield-check fs-1"></i>
+                    </div>
+                    <h4 class="fw-bold card-title">Firm Management</h4>
+                    <p class="text-muted card-text">
+                        Administrative tools for managing your firm's team, clients, and operations.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card h-100 border-0 shadow-sm p-4">
+                <div class="card-body">
+                    <div class="mb-3 text-primary">
+                        <i class="bi bi-file-earmark-arrow-up fs-1"></i>
+                    </div>
+                    <h4 class="fw-bold card-title">EFTPS Compatibility</h4>
+                    <p class="text-muted card-text">
+                        Seamless exporting formatted for EFTPS software for efficient tax payment processing and compliance.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}{% endblock %}

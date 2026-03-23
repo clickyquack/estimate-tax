@@ -5,13 +5,85 @@
 {% block styles %}{% endblock %}
 
 {% block content %}
-    <div class="container">
-        <h1 class="display-4 fw-bold mb-3">System Administrator Menu</h1>
-        <p class="lead text-muted mb-4">Manage Hosting</p>
-        <p class="lead text-muted mb-4">Review System Audit Logs</p>
-        <p class="lead text-muted mb-4">Manage All Profiles</p>
-        <p class="lead text-muted mb-4">Manage Backups</p>
+<div class="container-fluid py-4">
+
+    <!-- Sysadmin Summary -->
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-body p-4 text-center">
+            <div class="d-flex justify-content-center align-items-center mb-2">
+                <div class="text-center">
+                    <h1 class="fw-bold mb-4">System Administrator Menu</h1>
+                </div>
+            </div>
+
+            <div class="row g-3 mb-4 text-center">
+                <div class="col-md-6">
+                    <div class="card border-1 shadow-sm p-3">
+                        <small class="text-muted text-uppercase fw-bold">Total Firms</small>
+                        <h3 class="fw-bold">X Firms</h3>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card border-1 shadow-sm p-3">
+                        <small class="text-muted text-uppercase fw-bold">Total Users</small>
+                        <h3 class="fw-bold">X Users</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
+
+    <!-- Manage Hosting -->
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-white pt-4 border-0">
+            <div class="d-flex justify-content-center align-items-center mb-2">
+                <div class="text-center">
+                    <h1 class="fw-bold mb-0">Manage Hosting</h1>
+                    <p class="text-muted">Manage server configurations and hosting settings.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Review System Audit Logs -->
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-white pt-4 border-0">
+            <div class="d-flex justify-content-center align-items-center mb-2">
+                <div class="text-center">
+                    <h1 class="fw-bold mb-0">Review System Audit Logs</h1>
+                    <p class="text-muted">View system audit logs.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Manage User Profiles -->
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-white pt-4 border-0">
+            <div class="d-flex justify-content-center align-items-center mb-2">
+                <div class="text-center">
+                    <h1 class="fw-bold mb-0">Manage User Profiles</h1>
+                    <p class="text-muted">Create, edit, and delete user profiles.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Manage Backups -->
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-white pt-4 border-0">
+            <div class="d-flex justify-content-center align-items-center mb-2">
+                <div class="text-center">
+                    <h1 class="fw-bold mb-0">Manage Backups</h1>
+                    <p class="text-muted">Create, restore, and manage system backups.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+
 {% endblock %}
 
 {% block scripts %}{% endblock %}
