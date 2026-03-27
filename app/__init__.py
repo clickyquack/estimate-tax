@@ -7,6 +7,22 @@ from config import Config
 from functools import wraps
 from flask_login import current_user, login_required, login_user, logout_user
 
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+
+
+# Helper function to log user actions
+def log_action(action, entity_type=None, entity_id=None):
+    from .models import AuditLog
+    new_log = AuditLog(
+        user_id=current_user.id,
+        action=action,
+        entity_type=entity_type,
+        entity_id=entity_id,
+        ip_address=request.remote_addr
+    )
+    db.session.add(new_log)
+
 
 
 def create_app():
@@ -30,6 +46,7 @@ def create_app():
     login_manager.init_app(app)
     login_manager.login_view = 'login'
 
+    limiter = Limiter(get_remote_address, app=app)
 
     # -------------------------------------
     # ------------ DECORATORS -------------
@@ -75,6 +92,7 @@ def create_app():
         return render_template('login.html')
     
     @app.route('/log_user_in', methods=['POST'])
+    @limiter.limit("10 per minute")
     def log_user_in():
         from .models import User
 
@@ -168,6 +186,8 @@ def create_app():
             return response
 
         client = Client.query.get_or_404(int(client_id))
+        if client.firm_id != current_user.firm_id:
+            return "Forbidden", 403
 
         # Data Extraction
         amount = request.form.get('total_payment_amount', '0')
@@ -223,6 +243,8 @@ def create_app():
                 input_time=datetime.strptime(request.form.get('input_time'), '%H:%M').time(),
                 payment_status=request.form.get('payment_status'),
             )
+
+            log_action('Created Tax Payment', entity_type='ScheduledPayment', entity_id=new_payment.id)
             
             db.session.add(new_payment)
             db.session.commit()
@@ -280,11 +302,16 @@ def create_app():
         # Update info
         client.name = request.form.get('name')
         client.email = request.form.get('email')
+        client.phone = request.form.get('phone')
+        client.address = request.form.get('address')
         client.tax_id = request.form.get('tax_id')
         # Update Assignments
         selected_accountant_ids = request.form.getlist('accountant_ids')
         selected_users = User.query.filter(User.id.in_(selected_accountant_ids)).all()
         client.users = selected_users
+
+        log_action('Updated Client', entity_type='Client', entity_id=client.id)
+
         db.session.commit()
         response = make_response("", 200)
         response.headers['HX-Refresh'] = 'true'
@@ -299,6 +326,7 @@ def create_app():
         if client.firm_id != current_user.firm_id:
             return "Forbidden", 403
         # Delete the client
+        log_action('Deleted Client', entity_type='Client', entity_id=client.id)
         db.session.delete(client)
         db.session.commit()
         response = make_response("", 200)
@@ -321,6 +349,8 @@ def create_app():
         new_client = Client(
             name=request.form.get('name'),
             email=request.form.get('email'),
+            phone=request.form.get('phone'),
+            address=request.form.get('address'),
             tax_id=request.form.get('tax_id'),
             firm_id=current_user.firm_id
         )
@@ -328,6 +358,8 @@ def create_app():
         selected_ids = request.form.getlist('accountant_ids')
         new_client.users = User.query.filter(User.id.in_(selected_ids)).all()
         db.session.add(new_client)
+        db.session.flush()
+        log_action('Created Client', entity_type='Client', entity_id=new_client.id)
         db.session.commit()
         response = make_response("", 200)
         response.headers['HX-Refresh'] = 'true'
@@ -367,6 +399,7 @@ def create_app():
         new_password = request.form.get('new_password')
         if new_password and len(new_password) >= 8:
             accountant.set_password(new_password)
+        log_action('Updated Accountant', entity_type='User', entity_id=accountant.id)
         db.session.commit()
         response = make_response("", 200)
         response.headers['HX-Refresh'] = 'true'
@@ -381,6 +414,7 @@ def create_app():
         accountant = User.query.get_or_404(user_id)
         if accountant.firm_id != current_user.firm_id:
             return "Forbidden", 403
+        log_action('Deleted Accountant', entity_type='User', entity_id=accountant.id)
         db.session.delete(accountant)
         db.session.commit()
         response = make_response("", 200)
@@ -420,6 +454,8 @@ def create_app():
         new_acc.set_password(password)
         try:
             db.session.add(new_acc)
+            db.session.flush()
+            log_action('Created Accountant', entity_type='User', entity_id=new_acc.id)
             db.session.commit()
         except Exception as e:
             db.session.rollback()
@@ -483,6 +519,8 @@ def create_app():
         # Add client to database
         try:
             db.session.add(new_client)
+            db.session.flush()
+            log_action('Generated Test Client', entity_type='Client', entity_id=new_client.id)
             db.session.commit()
             # flash(f"Generated client: {new_client.name}", "success")
         except Exception as e:
