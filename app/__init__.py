@@ -310,7 +310,7 @@ def create_app():
         selected_users = User.query.filter(User.id.in_(selected_accountant_ids)).all()
         client.users = selected_users
 
-        log_action('Updated Client', entity_type='Client', entity_id=client.id)
+        log_action('Updated Client: ' + client.name, entity_type='Client', entity_id=client.id)
 
         db.session.commit()
         response = make_response("", 200)
@@ -326,7 +326,7 @@ def create_app():
         if client.firm_id != current_user.firm_id:
             return "Forbidden", 403
         # Delete the client
-        log_action('Deleted Client', entity_type='Client', entity_id=client.id)
+        log_action('Deleted Client: ' + client.name, entity_type='Client', entity_id=client.id)
         db.session.delete(client)
         db.session.commit()
         response = make_response("", 200)
@@ -359,7 +359,7 @@ def create_app():
         new_client.users = User.query.filter(User.id.in_(selected_ids)).all()
         db.session.add(new_client)
         db.session.flush()
-        log_action('Created Client', entity_type='Client', entity_id=new_client.id)
+        log_action('Created Client: ' + new_client.name, entity_type='Client', entity_id=new_client.id)
         db.session.commit()
         response = make_response("", 200)
         response.headers['HX-Refresh'] = 'true'
@@ -399,7 +399,7 @@ def create_app():
         new_password = request.form.get('new_password')
         if new_password and len(new_password) >= 8:
             accountant.set_password(new_password)
-        log_action('Updated Accountant', entity_type='User', entity_id=accountant.id)
+        log_action('Updated Accountant: ' + accountant.name, entity_type='User', entity_id=accountant.id)
         db.session.commit()
         response = make_response("", 200)
         response.headers['HX-Refresh'] = 'true'
@@ -414,7 +414,7 @@ def create_app():
         accountant = User.query.get_or_404(user_id)
         if accountant.firm_id != current_user.firm_id:
             return "Forbidden", 403
-        log_action('Deleted Accountant', entity_type='User', entity_id=accountant.id)
+        log_action('Deleted Accountant: ' + accountant.name, entity_type='User', entity_id=accountant.id)
         db.session.delete(accountant)
         db.session.commit()
         response = make_response("", 200)
@@ -455,7 +455,7 @@ def create_app():
         try:
             db.session.add(new_acc)
             db.session.flush()
-            log_action('Created Accountant', entity_type='User', entity_id=new_acc.id)
+            log_action('Created Accountant: ' + new_acc.name, entity_type='User', entity_id=new_acc.id)
             db.session.commit()
         except Exception as e:
             db.session.rollback()
@@ -469,7 +469,20 @@ def create_app():
     @app.route('/sysadmin')
     @sysadmin_required
     def sysadmin():
-        return render_template('sysadmin.html')
+
+        from .models import Firm, User, AuditLog
+        
+        total_firms = Firm.query.count()
+        total_users = User.query.count()
+        
+        logs = AuditLog.query.order_by(AuditLog.timestamp.desc()).all()
+        
+        return render_template(
+            'sysadmin.html', 
+            total_firms=total_firms, 
+            total_users=total_users, 
+            logs=logs
+        )
 
 
 
@@ -520,7 +533,7 @@ def create_app():
         try:
             db.session.add(new_client)
             db.session.flush()
-            log_action('Generated Test Client', entity_type='Client', entity_id=new_client.id)
+            log_action('Generated Test Client: ' + new_client.name, entity_type='Client', entity_id=new_client.id)
             db.session.commit()
             # flash(f"Generated client: {new_client.name}", "success")
         except Exception as e:

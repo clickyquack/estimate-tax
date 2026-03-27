@@ -20,13 +20,13 @@
                 <div class="col-md-6">
                     <div class="card border-1 shadow-sm p-3">
                         <small class="text-muted text-uppercase fw-bold">Total Firms</small>
-                        <h3 class="fw-bold">X Firms</h3>
+                        <h3 class="fw-bold">{{ total_firms }} Firms</h3>
                     </div>
                 </div>
                 <div class="col-md-6">
                     <div class="card border-1 shadow-sm p-3">
                         <small class="text-muted text-uppercase fw-bold">Total Users</small>
-                        <h3 class="fw-bold">X Users</h3>
+                        <h3 class="fw-bold">{{ total_users }} Users</h3>
                     </div>
                 </div>
             </div>
@@ -42,6 +42,7 @@
                     <p class="text-muted">Manage server configurations and hosting settings.</p>
                 </div>
             </div>
+            <h4 class="text-danger text-center">This will likely just be done through the hosting service.</p>
         </div>
     </div>
 
@@ -50,9 +51,54 @@
         <div class="card-header bg-white pt-4 border-0">
             <div class="d-flex justify-content-center align-items-center mb-2">
                 <div class="text-center">
-                    <h1 class="fw-bold mb-0">Review System Audit Logs</h1>
-                    <p class="text-muted">View system audit logs.</p>
+                    <h1 class="fw-bold mb-0">System Audit Logs</h1>
+                    <p class="text-muted">Real-time track of all sensitive database mutations.</p>
                 </div>
+            </div>
+        </div>
+        <div class="card-body px-4 pb-4">
+            <div class="table-responsive" style="max-height: 75vh; overflow-y: auto; border: 1px solid #eee; border-radius: 8px;">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="">Timestamp</th>
+                            <th class="text-center">User</th>
+                            <th class="text-center">Action</th>
+                            <th class="text-center">Entity</th>
+                            <th class="text-end">IP Address</th>
+                        </tr>
+                    </thead>
+                    <tbody class="small">
+                        {% for log in logs %}
+                        <tr>
+                            <!-- Timestamp -->
+                            <td class="text-nowrap">{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                            <!-- User -->
+                            <td class="text-center">
+                                <span>
+                                    {{ log.user.name if log.user else "System" }} (ID: {{ log.user_id if log.user_id else "N/A" }})
+                                </span>
+                            </td>
+                            <!-- Action -->
+                            <td class="fw-bold text-center">{{ log.action }}</td>
+                            <!-- Entity -->
+                            <td class="text-center">
+                                {% if log.entity_type %}
+                                <span>{{ log.entity_type }} (ID: {{ log.entity_id }})</span>
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+                            <!-- IP Address -->
+                            <td class="font-monospace text-muted text-end">{{ log.ip_address }}</td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="5" class="text-center py-4 text-muted">No logs recorded yet.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
             </div>
         </div>
     </div>
@@ -78,6 +124,7 @@
                     <p class="text-muted">Create, restore, and manage system backups.</p>
                 </div>
             </div>
+            <h4 class="text-danger text-center">This will likely just be done through the hosting service.</p>
         </div>
     </div>
 
