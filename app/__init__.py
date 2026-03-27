@@ -474,6 +474,8 @@ def create_app():
         
         total_firms = Firm.query.count()
         total_users = User.query.count()
+
+        all_users = User.query.join(Firm).order_by(Firm.name, User.name).all()
         
         logs = AuditLog.query.order_by(AuditLog.timestamp.desc()).all()
         
@@ -481,8 +483,108 @@ def create_app():
             'sysadmin.html', 
             total_firms=total_firms, 
             total_users=total_users, 
+            all_users=all_users,
             logs=logs
         )
+    
+    @app.route('/sysadmin/user/<int:user_id>/edit', methods=['GET'])
+    @sysadmin_required
+    def sysadmin_edit_user(user_id):
+        from .models import User, Firm
+        
+        target_user = User.query.get_or_404(user_id)
+        all_firms = Firm.query.order_by(Firm.name).all()
+        
+        return render_template('partials/sysadmin_edit_user.html', 
+                            target_user=target_user, 
+                            all_firms=all_firms)
+
+    @app.route('/sysadmin/user/<int:user_id>/update', methods=['POST'])
+    @sysadmin_required
+    def sysadmin_update_user(user_id):
+        from .models import User, Role
+        
+        target_user = User.query.get_or_404(user_id)
+        
+        target_user.name = request.form.get('name')
+        target_user.email = request.form.get('email')
+        target_user.is_active = 'is_active' in request.form
+        
+        target_user.firm_id = int(request.form.get('firm_id'))
+        
+        new_role_name = request.form.get('role_name')
+        if new_role_name:
+            target_user.role = Role.query.filter_by(name=new_role_name).first()
+        
+        new_pw = request.form.get('new_password')
+        if new_pw and len(new_pw) >= 8:
+            target_user.set_password(new_pw)
+            
+        log_action(f"Sysadmin Panel: Updated {target_user.name} (Firm ID: {target_user.firm_id})", "User", target_user.id)
+        db.session.commit()
+        
+        response = make_response("", 200)
+        response.headers['HX-Refresh'] = 'true'
+        return response
+    
+    @app.route('/sysadmin/user/<int:user_id>', methods=['DELETE'])
+    @sysadmin_required
+    def sysadmin_delete_user(user_id):
+        from .models import User
+        from flask import make_response
+        
+        target_user = User.query.get_or_404(user_id)
+        log_action(f"Sysadmin Panel: Deleted {target_user.name} (Firm ID: {target_user.firm_id})", "User", target_user.id)
+        db.session.delete(target_user)
+        db.session.commit()
+        
+        response = make_response("", 200)
+        response.headers['HX-Refresh'] = 'true'
+        return response
+    
+
+    @app.route('/sysadmin/user/add', methods=['GET'])
+    @sysadmin_required
+    def sysadmin_add_user_form():
+        from .models import Firm
+        all_firms = Firm.query.order_by(Firm.name).all()
+        return render_template('partials/sysadmin_add_user.html', all_firms=all_firms)
+
+    @app.route('/sysadmin/user/create', methods=['POST'])
+    @sysadmin_required
+    def sysadmin_create_user():
+        from .models import User, Role, Firm
+        
+        name = request.form.get('name')
+        email = request.form.get('email')
+        password = request.form.get('password')
+        firm_id = request.form.get('firm_id')
+        role_name = request.form.get('role_name')
+
+        # Check if email is already taken
+        if User.query.filter_by(email=email).first():
+            all_firms = Firm.query.order_by(Firm.name).all()
+            return render_template('partials/sysadmin_add_user.html', 
+                                all_firms=all_firms, 
+                                error=f"Email {email} is already in use.")
+
+        new_user = User(
+            name=name,
+            email=email,
+            firm_id=int(firm_id),
+            is_active=True
+        )
+        new_user.role = Role.query.filter_by(name=role_name).first()
+        new_user.set_password(password)
+
+        db.session.add(new_user)
+        db.session.flush()
+        log_action(f"Sysadmin Panel: Created User {name} (Firm ID: {firm_id})", "User", new_user.id)
+        db.session.commit()
+
+        response = make_response("", 200)
+        response.headers['HX-Refresh'] = 'true'
+        return response
 
 
 

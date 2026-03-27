@@ -1,0 +1,80 @@
+<div class="modal-header border-0 pb-0">
+    <h5 class="modal-title fw-bold">Edit System User</h5>
+    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+</div>
+<div class="modal-body">
+    <form hx-post="{{ url_for('sysadmin_update_user', user_id=target_user.id) }}" hx-target="#modal-content-placeholder">
+
+        {% if error %}
+        <div class="alert alert-danger d-flex align-items-center small py-2 border-0 mb-3" role="alert">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+            <div>{{ error }}</div>
+        </div>
+        {% endif %}
+
+        <div class="mb-3">
+            <label class="form-label small fw-bold text-muted">Full Name</label>
+            <input type="text" name="name" class="form-control" value="{{ target_user.name }}" required
+                placeholder="e.g. John Doe">
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label small fw-bold text-muted">Email Address</label>
+            <input type="email" name="email" class="form-control" value="{{ target_user.email }}" required>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label small fw-bold text-muted">Associated Firm</label>
+            <select name="firm_id" class="form-select">
+                {% for firm in all_firms %}
+                <option value="{{ firm.id }}" {% if firm.id == target_user.firm_id %}selected{% endif %}>
+                    {{ firm.name }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label small fw-bold text-muted">System Role</label>
+            <select name="role_name" class="form-select">
+                <option value="Accountant" {% if target_user.role.name == 'Accountant' %}selected{% endif %}>Accountant</option>
+                <option value="Admin" {% if target_user.role.name == 'Admin' %}selected{% endif %}>Admin</option>
+                <option value="SysAdmin" {% if target_user.role.name == 'SysAdmin' %}selected{% endif %}>SysAdmin</option>
+                <option value="Developer" {% if target_user.role.name == 'Developer' %}selected{% endif %}>Developer</option>
+            </select>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label small fw-bold text-muted">Reset Password</label>
+            <div class="input-group">
+                <span class="input-group-text bg-light border-end-0">
+                    <i class="bi bi-key"></i>
+                </span>
+                <input type="password" name="new_password" class="form-control border-start-0"
+                    placeholder="Leave blank to keep current" minlength="8" autocomplete="new-password">
+            </div>
+        </div>
+
+        <div class="mb-4">
+            <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" name="is_active" id="sysActiveSwitch" 
+                    {% if target_user.is_active %}checked{% endif %}>
+                <label class="form-check-label ms-2 fw-bold" for="sysActiveSwitch">Active Account</label>
+            </div>
+            <small class="text-muted d-block mt-1">
+                Deactivating prevents login across the entire platform.
+            </small>
+        </div>
+
+        <div class="d-grid gap-2">
+            <button type="submit" class="btn btn-primary fw-bold">Update User</button>
+
+            <button type="button" class="btn btn-link btn-sm text-danger text-decoration-none mt-2"
+                hx-delete="{{ url_for('sysadmin_delete_user', user_id=target_user.id) }}"
+                hx-confirm="Permanently remove {{ target_user.name }} from the entire system?"
+                data-bs-dismiss="modal">
+                <i class="bi bi-person-x me-1"></i> Delete User Globally
+            </button>
+        </div>
+    </form>
+</div>
