@@ -491,6 +491,22 @@ def create_app():
         
         return redirect(url_for('test_db'))
 
+    # ----------------------------------------
+    # ------------- ERROR ROUTES -------------
+    # ----------------------------------------
+
+    @app.errorhandler(404)
+    def page_not_found(e):
+        return render_template('errors/404.html'), 404
+
+    @app.errorhandler(403)
+    def forbidden(e):
+        return render_template('errors/403.html'), 403
+
+    @app.errorhandler(401)
+    def unauthorized(error):
+        return render_template('errors/401.html'), 401
+
 
 
     return app

@@ -92,6 +92,8 @@
                                 <thead class="table-light">
                                     <tr>
                                         <th>Name</th>
+                                        <th class="text-center">Phone Number</th>
+                                        <th class="text-center">Address</th>
                                         <th class="text-center">Tax ID Number</th>
                                         <th class="text-center">Assigned To</th>
                                         <th class="text-end"></th> <!-- Actions -->
@@ -104,6 +106,8 @@
                                             <div class="fw-bold">{{ client.name }}</div>
                                             <small class="text-muted">{{ client.email }}</small>
                                         </td>
+                                        <td class="text-center">{{ client.phone or 'NOT SET' }}</td>
+                                        <td class="text-center">{{ client.address or 'NOT SET' }}</td>
                                         <td class="text-center">{{ client.tax_id or 'NOT SET' }}</td>
                                         <td class="text-center">
                                             {% if client.users %}

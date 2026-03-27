@@ -6,6 +6,39 @@ from werkzeug.security import generate_password_hash, check_password_hash
 
 from .extensions import login_manager
 
+from cryptography.fernet import Fernet
+import os
+
+
+cipher = Fernet(os.environ.get('ENCRYPTION_KEY').encode())
+
+# Helper function to create encrypted properties
+def encrypted_property(attr_name):
+    @property
+    def getter(self):
+        encrypted_val = getattr(self, attr_name)
+        # If there's no encrypted data, just show blank field
+        if not encrypted_val:
+            return None
+        # If the data exists but the ENCRYPTION_KEY is missing from .env
+        if not cipher:
+            return "[Key Missing]"   
+        # Try to decrypt
+        try:
+            return cipher.decrypt(encrypted_val.encode()).decode()
+        except Exception:
+            # Wrong key or something
+            return "[Encrypted]"
+
+    @getter.setter
+    def setter(self, value):
+        if value:
+            encrypted_val = cipher.encrypt(value.encode()).decode()
+            setattr(self, attr_name, encrypted_val)
+        else:
+            setattr(self, attr_name, None)
+
+    return setter # object with both getter and setter
 
 
 # =========================
@@ -133,10 +166,15 @@ class Client(db.Model):
     firm_id = db.Column(db.Integer, db.ForeignKey('firms.id', ondelete='CASCADE'), nullable=False, index=True)
     name = db.Column(db.String(255), nullable=False)
     email = db.Column(db.String(255))
-    phone = db.Column(db.String(50))
-    tax_id = db.Column(db.String(50))
-    address = db.Column(db.Text)
     created_at = db.Column(db.DateTime, server_default=func.now())
+
+    # Ecrypted fields
+    _tax_id_encrypted = db.Column('tax_id', db.Text)
+    tax_id = encrypted_property('_tax_id_encrypted')
+    _address_encrypted = db.Column('address', db.Text)
+    address = encrypted_property('_address_encrypted')
+    _phone_encrypted = db.Column('phone', db.Text)
+    phone = encrypted_property('_phone_encrypted')
 
     # Relationships
     firm = db.relationship('Firm', back_populates='clients')
@@ -196,18 +234,25 @@ class ScheduledPayment(db.Model):
     status = db.Column(db.String(50), default='pending')
     
     # --- Added field ---
-    eft_number = db.Column(db.String(15), nullable=False)
     tax_period = db.Column(db.String(6), nullable=False)
     input_method = db.Column(db.String(1), nullable=False)
-    original_eft_number = db.Column(db.String(15))
-    cancellation_eft_number = db.Column(db.String(15))
-    bulk_debit_trace_number = db.Column(db.String(50))
-    bulk_debit_cancellation_number = db.Column(db.String(50))
-    ach_trace_number = db.Column(db.String(50))
     transaction_code = db.Column(db.String(10))
     input_date = db.Column(db.Date, server_default=func.current_date())
     input_time = db.Column(db.Time, server_default=func.current_time())
     payment_status = db.Column(db.String(50))
+    # Encrypted fields
+    _eft_number_encrypted = db.Column('eft_number', db.Text)
+    eft_number = encrypted_property('_eft_number_encrypted')
+    _original_eft_number_encrypted = db.Column('original_eft_number', db.Text)
+    original_eft_number = encrypted_property('_original_eft_number_encrypted')
+    _ach_trace_number_encrypted = db.Column('ach_trace_number', db.Text)
+    ach_trace_number = encrypted_property('_ach_trace_number_encrypted')
+    _cancellation_eft_number_encrypted = db.Column('cancellation_eft_number', db.Text)
+    cancellation_eft_number = encrypted_property('_cancellation_eft_number_encrypted')
+    _bulk_debit_trace_number_encrypted = db.Column('bulk_debit_trace_number', db.Text)
+    bulk_debit_trace_number = encrypted_property('_bulk_debit_trace_number_encrypted')
+    _bulk_debit_cancellation_number_encrypted = db.Column('bulk_debit_cancellation_number', db.Text)
+    bulk_debit_cancellation_number = encrypted_property('_bulk_debit_cancellation_number_encrypted')
 
     # Relationships
     schedule = db.relationship('PaymentSchedule', back_populates='scheduled_payments')
