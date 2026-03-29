@@ -74,6 +74,33 @@ def create_app():
     def login():
         return render_template('login.html')
     
+    @app.route('/register-firm', methods=['GET', 'POST'])
+    def register_firm():
+        from .models import Firm, User, Role
+        all_firms = Firm.query.all()
+        if request.method == 'POST':
+            firm_name = request.form.get('firm_name')
+            firm_email = request.form.get('firm_email')
+            owner_name = request.form.get('owner_name')
+            owner_password = request.form.get('owner_password')
+            
+            new_firm = Firm(name=firm_name, email=firm_email, status="Active")
+            db.session.add(new_firm)
+            db.session.flush() # Gets the firm ID before committing
+
+            # Create the owner user
+            admin_role = Role.query.filter_by(name='Admin').first()
+            owner = User(name=owner_name, email=firm_email, firm_id=new_firm.id, role_id=admin_role.id)
+            owner.set_password(owner_password)
+            db.session.add(owner)
+            db.session.commit()
+            
+            flash('Firm registered successfully', 'success')
+            return redirect(url_for('login'))
+            
+        return render_template('register-firm.html', firms=all_firms)
+        
+    
     @app.route('/log_user_in', methods=['POST'])
     def log_user_in():
         from .models import User
@@ -446,6 +473,25 @@ def create_app():
     @developer_required
     def test():
         return render_template('test.html')
+    
+    # Generate new firm
+    @app.route('/generate_firm', methods=['POST'])
+    @developer_required
+    def generate_firm():
+        from .models import Firm
+        from faker import Faker
+        fake = Faker()
+
+        new_firm = Firm(
+            name=fake.company(),
+            email=fake.email(),
+            status="Active"
+        )
+        db.session.add(new_firm)
+        db.session.commit()
+        
+        return redirect(url_for('test_db')) 
+
 
     # Test database
     @app.route('/test-db')
