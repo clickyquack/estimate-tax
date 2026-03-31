@@ -11,18 +11,21 @@
 
         <!-- Left Column -->
         <div class="col-lg-7">
-            <div class="card border-0 shadow-lg p-4 p-md-5 rounded-4">
+            <div class="card border-0 shadow-sm p-4 p-md-5 rounded-4">
                 <div class="card-body">
                     <h1 class="display-3 fw-bold lh-1 mb-4 text-dark">Tax Payments, Simplified.</h1>
                     <p class="lead text-muted mb-5 fs-4">
                         A dedicated workspace for accountants to visualize, schedule, and manage client tax payments.
                     </p>
                     <div class="d-grid gap-3 d-md-flex justify-content-md-start">
-                        <a href="{{ url_for('dashboard') }}" class="btn btn-primary btn-lg px-5 py-3 shadow-sm rounded-pill">
+                        <a href="{{ url_for('dashboard') }}" class="btn btn-primary btn-md px-4 py-3 shadow-sm rounded-pill">
                             Get Started
                         </a>
-                        <a href="#features" class="btn btn-outline-dark btn-lg px-4 py-3 shadow-sm rounded-pill">
+                        <a href="#features" class="btn btn-outline-dark btn-md px-3 py-3 shadow-sm rounded-pill">
                             Explore Features <i class="bi bi-arrow-down ms-1"></i>
+                        </a>
+                        <a href="{{ url_for('register_firm') }}" class="btn btn-outline-dark btn-md px-3 py-3 shadow-sm rounded-pill">
+                            Register Your Firm
                         </a>
                     </div>
                 </div>
@@ -32,7 +35,7 @@
         <!-- Right Column -->
         <div class="col-lg-5">
             <div class="position-relative">
-                <div class="p-5 bg-white border rounded-4 shadow-lg overflow-hidden">
+                <div class="p-5 bg-white border rounded-4 shadow-sm overflow-hidden">
 
                     <img src="{{ url_for('static', filename='images/dashboard-preview.png') }}" alt="Dashboard Preview" class="img-fluid rounded-4">
                 </div>
@@ -91,6 +94,28 @@
         </div>
     </div>
 </div>
+
+<!-- Register Firm Section -->
+ <div class="bg-light py-5">
+    <div class="container">
+        <div class="card border-0 shadow-sm overflow-hidden rounded-4">
+            <div class="row g-0 align-items-center">
+                <div class="col-md-8 p-5">
+                    <h2 class="fw-bold mb-3">Ready to bring your firm on board?</h2>
+                    <p class="text-muted lead mb-0">
+                        Create a dedicated space for your accountants and start managing your clients' tax payments more efficiently today.
+                    </p>
+                </div>
+                <div class="col-md-4 p-5 text-md-end text-center">
+                    <a href="{{ url_for('register_firm') }}" class="btn btn-primary btn-lg px-5 py-3 shadow-sm rounded-pill">
+                        Register Your Firm
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}{% endblock %}

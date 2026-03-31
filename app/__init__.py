@@ -100,6 +100,7 @@ def create_app():
         return render_template('login.html')
     
     @app.route('/register-firm', methods=['GET', 'POST'])
+    @limiter.limit("10 per minute")
     def register_firm():
         from .models import Firm, User, Role
         all_firms = Firm.query.all()
@@ -107,21 +108,34 @@ def create_app():
             firm_name = request.form.get('firm_name')
             firm_email = request.form.get('firm_email')
             owner_name = request.form.get('owner_name')
+            admin_email = request.form.get('admin_email')
             owner_password = request.form.get('owner_password')
-            
-            new_firm = Firm(name=firm_name, email=firm_email, status="Active")
-            db.session.add(new_firm)
-            db.session.flush() # Gets the firm ID before committing
 
-            # Create the owner user
-            admin_role = Role.query.filter_by(name='Admin').first()
-            owner = User(name=owner_name, email=firm_email, firm_id=new_firm.id, role_id=admin_role.id)
-            owner.set_password(owner_password)
-            db.session.add(owner)
-            db.session.commit()
+            # Integrity Checks
+            existing_user = User.query.filter_by(email=admin_email).first()
+            if existing_user:
+                flash('That email is already registered to a user.', 'danger')
+                return render_template('register-firm.html')
             
-            flash('Firm registered successfully', 'success')
-            return redirect(url_for('login'))
+            # Create the firm and admin
+            try:
+                new_firm = Firm(name=firm_name, email=firm_email, status="Active")
+                db.session.add(new_firm)
+                db.session.flush() # Gets the firm ID before committing
+
+                # Create the owner user
+                admin_role = Role.query.filter_by(name='Admin').first()
+                owner = User(name=owner_name, email=admin_email, firm_id=new_firm.id, role_id=admin_role.id)
+                owner.set_password(owner_password)
+                db.session.add(owner)
+                db.session.commit()
+            
+                flash('Firm registered successfully', 'success')
+                return redirect(url_for('login'))
+            
+            except Exception as e:
+                db.session.rollback()
+                flash('An error occurred during registration. Please try again.', 'danger')
             
         return render_template('register-firm.html', firms=all_firms)
         

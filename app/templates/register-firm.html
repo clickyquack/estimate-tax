@@ -1,25 +1,94 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Register Firm</title>
-</head>
-<body>
-    <h2>Register a New Firm</h2>
+{% extends "base.html" %}
 
-    <form method="POST" action="/register-firm">
-        <label>Firm Name:</label>
-        <input type="text" name="firm_name" required><br><br>
+{% block title %}Register New Firm{% endblock %}
 
-        <label>Firm Email:</label>
-        <input type="email" name="firm_email" required><br><br>
+{% block styles %}{% endblock %}
 
-        <label>Your Name (Admin):</label>
-        <input type="text" name="owner_name" required><br><br>
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8 col-lg-6">
 
-        <label>Password:</label>
-        <input type="password" name="owner_password" required><br><br>
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white pt-5 pb-3 border-0 text-center">
+                    <div class="mb-3">
+                        <i class="bi bi-building-add text-primary display-4"></i>
+                    </div>
+                    <h1 class="fw-bold mb-0">Register Your Firm</h1>
+                    <p class="text-muted">Set up a new organization and administrative account.</p>
+                </div>
 
-        <button type="submit">Complete Registration</button>
-    </form>
-</body>
-</html>
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        {% for category, message in messages %}
+                            <div class="alert alert-{{ category }} small py-2 mx-4 text-center">{{ message }}</div>
+                        {% endfor %}
+                    {% endif %}
+                {% endwith %}
+
+                <div class="card-body px-4 pb-5">
+                    <form method="POST" action="{{ url_for('register_firm') }}" autocomplete="off">
+
+                        <div class="mb-4">
+                            <label class="form-label small fw-bold text-muted text-uppercase">Firm Information</label>
+                            <div class="row g-3">
+                                <div class="col-12">
+                                    <input type="text" name="firm_name" class="form-control"
+                                        placeholder="Firm Legal Name" required>
+                                </div>
+                                <div class="col-12">
+                                    <input type="email" name="firm_email" class="form-control"
+                                        placeholder="Firm Contact Email" required>
+                                </div>
+                            </div>
+                        </div>
+
+                        <hr class="my-4 text-muted opacity-25">
+
+                        <div class="mb-4">
+                            <label class="form-label small fw-bold text-muted text-uppercase">Primary
+                                Administrator</label>
+                            <div class="row g-3">
+                                <div class="col-12">
+                                    <input type="text" name="owner_name" class="form-control"
+                                        placeholder="Your Full Name" required>
+                                </div>
+                                <div class="col-12">
+                                    <input type="email" name="admin_email" class="form-control"
+                                        placeholder="Admin Login Email" required>
+                                </div>
+                                <div class="col-12">
+                                    <div class="input-group">
+                                        <span class="input-group-text bg-light border-end-0">
+                                            <i class="bi bi-shield-lock"></i>
+                                        </span>
+                                        <input type="password" name="owner_password" class="form-control border-start-0"
+                                            placeholder="Create Secure Password" required minlength="8">
+                                    </div>
+                                    <div class="form-text x-small text-muted mt-2">
+                                        Password must be at least 8 characters.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="d-grid gap-2 pt-2">
+                            <button type="submit" class="btn btn-primary fw-bold py-2">
+                                Complete Registration
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="card-footer bg-light border-0 py-3 text-center">
+                    <small class="text-muted">Already have a firm? <a href="{{ url_for('login') }}"
+                            class="text-decoration-none">Login here</a></small>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}{% endblock %}
