@@ -7,6 +7,26 @@ from config import Config
 from functools import wraps
 from flask_login import current_user, login_required, login_user, logout_user
 
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+
+
+# Helper function to log user actions
+def log_action(action, entity_type=None, entity_id=None):
+    from .models import AuditLog
+    new_log = AuditLog(
+        user_id=current_user.id,
+        action=action,
+        entity_type=entity_type,
+        entity_id=entity_id,
+        ip_address=request.remote_addr
+    )
+    db.session.add(new_log)
+
+
+# Initialize the rate limiter (attached to app later if not testing)
+limiter = Limiter(get_remote_address)
+
 
 
 def create_app():
@@ -30,6 +50,11 @@ def create_app():
     login_manager.init_app(app)
     login_manager.login_view = 'login'
 
+    # Attach rate limiter only if not in testing mode
+    if app.config['TESTING']:
+        limiter.enabled = False
+    else:
+        limiter.init_app(app)
 
     # -------------------------------------
     # ------------ DECORATORS -------------
@@ -74,7 +99,49 @@ def create_app():
     def login():
         return render_template('login.html')
     
+    @app.route('/register-firm', methods=['GET', 'POST'])
+    @limiter.limit("10 per minute")
+    def register_firm():
+        from .models import Firm, User, Role
+        all_firms = Firm.query.all()
+        if request.method == 'POST':
+            firm_name = request.form.get('firm_name')
+            firm_email = request.form.get('firm_email')
+            owner_name = request.form.get('owner_name')
+            admin_email = request.form.get('admin_email')
+            owner_password = request.form.get('owner_password')
+
+            # Integrity Checks
+            existing_user = User.query.filter_by(email=admin_email).first()
+            if existing_user:
+                flash('That email is already registered to a user.', 'danger')
+                return render_template('register-firm.html')
+            
+            # Create the firm and admin
+            try:
+                new_firm = Firm(name=firm_name, email=firm_email, status="Active")
+                db.session.add(new_firm)
+                db.session.flush() # Gets the firm ID before committing
+
+                # Create the owner user
+                admin_role = Role.query.filter_by(name='Admin').first()
+                owner = User(name=owner_name, email=admin_email, firm_id=new_firm.id, role_id=admin_role.id)
+                owner.set_password(owner_password)
+                db.session.add(owner)
+                db.session.commit()
+            
+                flash('Firm registered successfully', 'success')
+                return redirect(url_for('login'))
+            
+            except Exception as e:
+                db.session.rollback()
+                flash('An error occurred during registration. Please try again.', 'danger')
+            
+        return render_template('register-firm.html', firms=all_firms)
+        
+    
     @app.route('/log_user_in', methods=['POST'])
+    @limiter.limit("10 per minute")
     def log_user_in():
         from .models import User
 
@@ -168,6 +235,8 @@ def create_app():
             return response
 
         client = Client.query.get_or_404(int(client_id))
+        if client.firm_id != current_user.firm_id:
+            return "Forbidden", 403
 
         # Data Extraction
         amount = request.form.get('total_payment_amount', '0')
@@ -223,6 +292,8 @@ def create_app():
                 input_time=datetime.strptime(request.form.get('input_time'), '%H:%M').time(),
                 payment_status=request.form.get('payment_status'),
             )
+
+            log_action('Created Tax Payment', entity_type='ScheduledPayment', entity_id=new_payment.id)
             
             db.session.add(new_payment)
             db.session.commit()
@@ -280,11 +351,16 @@ def create_app():
         # Update info
         client.name = request.form.get('name')
         client.email = request.form.get('email')
+        client.phone = request.form.get('phone')
+        client.address = request.form.get('address')
         client.tax_id = request.form.get('tax_id')
         # Update Assignments
         selected_accountant_ids = request.form.getlist('accountant_ids')
         selected_users = User.query.filter(User.id.in_(selected_accountant_ids)).all()
         client.users = selected_users
+
+        log_action('Updated Client: ' + client.name, entity_type='Client', entity_id=client.id)
+
         db.session.commit()
         response = make_response("", 200)
         response.headers['HX-Refresh'] = 'true'
@@ -299,6 +375,7 @@ def create_app():
         if client.firm_id != current_user.firm_id:
             return "Forbidden", 403
         # Delete the client
+        log_action('Deleted Client: ' + client.name, entity_type='Client', entity_id=client.id)
         db.session.delete(client)
         db.session.commit()
         response = make_response("", 200)
@@ -321,6 +398,8 @@ def create_app():
         new_client = Client(
             name=request.form.get('name'),
             email=request.form.get('email'),
+            phone=request.form.get('phone'),
+            address=request.form.get('address'),
             tax_id=request.form.get('tax_id'),
             firm_id=current_user.firm_id
         )
@@ -328,6 +407,8 @@ def create_app():
         selected_ids = request.form.getlist('accountant_ids')
         new_client.users = User.query.filter(User.id.in_(selected_ids)).all()
         db.session.add(new_client)
+        db.session.flush()
+        log_action('Created Client: ' + new_client.name, entity_type='Client', entity_id=new_client.id)
         db.session.commit()
         response = make_response("", 200)
         response.headers['HX-Refresh'] = 'true'
@@ -367,6 +448,7 @@ def create_app():
         new_password = request.form.get('new_password')
         if new_password and len(new_password) >= 8:
             accountant.set_password(new_password)
+        log_action('Updated Accountant: ' + accountant.name, entity_type='User', entity_id=accountant.id)
         db.session.commit()
         response = make_response("", 200)
         response.headers['HX-Refresh'] = 'true'
@@ -381,6 +463,7 @@ def create_app():
         accountant = User.query.get_or_404(user_id)
         if accountant.firm_id != current_user.firm_id:
             return "Forbidden", 403
+        log_action('Deleted Accountant: ' + accountant.name, entity_type='User', entity_id=accountant.id)
         db.session.delete(accountant)
         db.session.commit()
         response = make_response("", 200)
@@ -420,6 +503,8 @@ def create_app():
         new_acc.set_password(password)
         try:
             db.session.add(new_acc)
+            db.session.flush()
+            log_action('Created Accountant: ' + new_acc.name, entity_type='User', entity_id=new_acc.id)
             db.session.commit()
         except Exception as e:
             db.session.rollback()
@@ -433,7 +518,122 @@ def create_app():
     @app.route('/sysadmin')
     @sysadmin_required
     def sysadmin():
-        return render_template('sysadmin.html')
+
+        from .models import Firm, User, AuditLog
+        
+        total_firms = Firm.query.count()
+        total_users = User.query.count()
+
+        all_users = User.query.join(Firm).order_by(Firm.name, User.name).all()
+        
+        logs = AuditLog.query.order_by(AuditLog.timestamp.desc()).all()
+        
+        return render_template(
+            'sysadmin.html', 
+            total_firms=total_firms, 
+            total_users=total_users, 
+            all_users=all_users,
+            logs=logs
+        )
+    
+    @app.route('/sysadmin/user/<int:user_id>/edit', methods=['GET'])
+    @sysadmin_required
+    def sysadmin_edit_user(user_id):
+        from .models import User, Firm
+        
+        target_user = User.query.get_or_404(user_id)
+        all_firms = Firm.query.order_by(Firm.name).all()
+        
+        return render_template('partials/sysadmin_edit_user.html', 
+                            target_user=target_user, 
+                            all_firms=all_firms)
+
+    @app.route('/sysadmin/user/<int:user_id>/update', methods=['POST'])
+    @sysadmin_required
+    def sysadmin_update_user(user_id):
+        from .models import User, Role
+        
+        target_user = User.query.get_or_404(user_id)
+        
+        target_user.name = request.form.get('name')
+        target_user.email = request.form.get('email')
+        target_user.is_active = 'is_active' in request.form
+        
+        target_user.firm_id = int(request.form.get('firm_id'))
+        
+        new_role_name = request.form.get('role_name')
+        if new_role_name:
+            target_user.role = Role.query.filter_by(name=new_role_name).first()
+        
+        new_pw = request.form.get('new_password')
+        if new_pw and len(new_pw) >= 8:
+            target_user.set_password(new_pw)
+            
+        log_action(f"Sysadmin Panel: Updated {target_user.name} (Firm ID: {target_user.firm_id})", "User", target_user.id)
+        db.session.commit()
+        
+        response = make_response("", 200)
+        response.headers['HX-Refresh'] = 'true'
+        return response
+    
+    @app.route('/sysadmin/user/<int:user_id>', methods=['DELETE'])
+    @sysadmin_required
+    def sysadmin_delete_user(user_id):
+        from .models import User
+        from flask import make_response
+        
+        target_user = User.query.get_or_404(user_id)
+        log_action(f"Sysadmin Panel: Deleted {target_user.name} (Firm ID: {target_user.firm_id})", "User", target_user.id)
+        db.session.delete(target_user)
+        db.session.commit()
+        
+        response = make_response("", 200)
+        response.headers['HX-Refresh'] = 'true'
+        return response
+    
+
+    @app.route('/sysadmin/user/add', methods=['GET'])
+    @sysadmin_required
+    def sysadmin_add_user_form():
+        from .models import Firm
+        all_firms = Firm.query.order_by(Firm.name).all()
+        return render_template('partials/sysadmin_add_user.html', all_firms=all_firms)
+
+    @app.route('/sysadmin/user/create', methods=['POST'])
+    @sysadmin_required
+    def sysadmin_create_user():
+        from .models import User, Role, Firm
+        
+        name = request.form.get('name')
+        email = request.form.get('email')
+        password = request.form.get('password')
+        firm_id = request.form.get('firm_id')
+        role_name = request.form.get('role_name')
+
+        # Check if email is already taken
+        if User.query.filter_by(email=email).first():
+            all_firms = Firm.query.order_by(Firm.name).all()
+            return render_template('partials/sysadmin_add_user.html', 
+                                all_firms=all_firms, 
+                                error=f"Email {email} is already in use.")
+
+        new_user = User(
+            name=name,
+            email=email,
+            firm_id=int(firm_id),
+            is_active=True
+        )
+        new_user.role = Role.query.filter_by(name=role_name).first()
+        new_user.set_password(password)
+
+        db.session.add(new_user)
+        db.session.flush()
+        log_action(f"Sysadmin Panel: Created User {name} (Firm ID: {firm_id})", "User", new_user.id)
+        db.session.commit()
+
+        response = make_response("", 200)
+        response.headers['HX-Refresh'] = 'true'
+        return response
 
 
 
@@ -446,6 +646,25 @@ def create_app():
     @developer_required
     def test():
         return render_template('test.html')
+    
+    # Generate new firm
+    @app.route('/generate_firm', methods=['POST'])
+    @developer_required
+    def generate_firm():
+        from .models import Firm
+        from faker import Faker
+        fake = Faker()
+
+        new_firm = Firm(
+            name=fake.company(),
+            email=fake.email(),
+            status="Active"
+        )
+        db.session.add(new_firm)
+        db.session.commit()
+        
+        return redirect(url_for('test_db')) 
+
 
     # Test database
     @app.route('/test-db')
@@ -483,6 +702,8 @@ def create_app():
         # Add client to database
         try:
             db.session.add(new_client)
+            db.session.flush()
+            log_action('Generated Test Client: ' + new_client.name, entity_type='Client', entity_id=new_client.id)
             db.session.commit()
             # flash(f"Generated client: {new_client.name}", "success")
         except Exception as e:
@@ -490,6 +711,22 @@ def create_app():
             return f"Database Error: {e}"
         
         return redirect(url_for('test_db'))
+
+    # ----------------------------------------
+    # ------------- ERROR ROUTES -------------
+    # ----------------------------------------
+
+    @app.errorhandler(404)
+    def page_not_found(e):
+        return render_template('errors/404.html'), 404
+
+    @app.errorhandler(403)
+    def forbidden(e):
+        return render_template('errors/403.html'), 403
+
+    @app.errorhandler(401)
+    def unauthorized(error):
+        return render_template('errors/401.html'), 401
 
 
 

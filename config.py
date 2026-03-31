@@ -1,15 +1,22 @@
 from datetime import timedelta
+from dotenv import load_dotenv
 import os
+
+load_dotenv()
 
 class Config:
     # -----------------------------------------------
     # ----------- ENVIRONMENTAL VARIABLES -----------
     # -----------------------------------------------
 
-    SECRET_KEY = os.environ.get('SECRET_KEY') or 'development-key-123'
+    TESTING = True
+
+    SECRET_KEY = os.environ.get('SECRET_KEY')
+    ENCRYPTION_KEY = os.environ.get('ENCRYPTION_KEY')
     
-    REMEMBER_COOKIE_DURATION = timedelta(days=7)
-    SESSION_PROTECTION = 'basic'
+    SESSION_PERMANENT = False
+    REMEMBER_COOKIE_DURATION = timedelta(seconds=0)
+    SESSION_PROTECTION = 'strong'
 
     # --------------------------------
     # ----------- DATABASE -----------

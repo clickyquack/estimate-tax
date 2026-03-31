@@ -11,6 +11,9 @@
 Set-ExecutionPolicy RemoteSigned -Scope Process
 venv\Scripts\activate
 
+# Generate New Sample Data
+python sample_data.py
+
 # Open index in browser
 start http://127.0.0.1:5000
 
@@ -101,7 +104,7 @@ pip freeze > requirements.txt
 
 | Technology | Description |
 | :--- | :--- |
-| **Python** | Backend programming language. |
+| **Python** | Python 3.x - Backend programming language. |
 | **Flask** | Web framework. |
 | **SQLAlchemy** | Object-Relational Mapper (ORM). Allows managing the database using Python code instead of writing raw SQL strings. Convenient, modular, and secure. Allows for database type to be changed easily. |
 | **SQLite** | Database. Good for development, but not scalable. |

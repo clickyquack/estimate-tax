@@ -16,6 +16,9 @@ jobs:
   build:
 
     runs-on: ubuntu-latest
+    env:
+      SECRET_KEY: ${{ secrets.SECRET_KEY }}
+      ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
 
     steps:
     - uses: actions/checkout@v5

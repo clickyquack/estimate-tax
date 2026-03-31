@@ -4,6 +4,10 @@ import pytest
 from app import create_app
 from app.models import User, Role
 
+from flask_login import login_user
+
+
+
 @pytest.fixture
 def app():
     app = create_app()
@@ -20,53 +24,41 @@ def client(app):
 # Authenticate using a developer user role
 @pytest.fixture
 def auth_developer(client, app):
-    with app.app_context():
-        # Target the developer user created by sample_data.py
-        user = User.query.filter_by(email="developer@test.com").first()
-        if not user:
-            pytest.fail("Developer user not found. Ensure sample_data.py ran correctly.")
-        with client.session_transaction() as sess:
-            sess['_user_id'] = str(user.id)
-            sess['_fresh'] = True   
+    client.post('/log_user_in', data={
+        'email': 'developer@test.com',
+        'password': 'developer',
+        'remember': 'y'
+    }, follow_redirects=True)
     return client
 
 # Authenicate using a sysadmin user role
 @pytest.fixture
 def auth_sysadmin(client, app):
-    with app.app_context():
-        # Target the sysadmin user created by sample_data.py
-        user = User.query.filter_by(email="sysadmin@test.com").first()
-        if not user:
-            pytest.fail("SysAdmin user not found. Ensure sample_data.py ran correctly.")
-        with client.session_transaction() as sess:
-            sess['_user_id'] = str(user.id)
-            sess['_fresh'] = True   
+    client.post('/log_user_in', data={
+        'email': 'sysadmin@test.com',
+        'password': 'sysadmin',
+        'remember': 'y'
+    }, follow_redirects=True)
     return client
 
 # Authenticate using an admin user role
 @pytest.fixture
 def auth_admin(client, app):
-    with app.app_context():
-        # Target the admin user created by sample_data.py
-        user = User.query.filter_by(email="admin@test.com").first()
-        if not user:
-            pytest.fail("Admin user not found. Ensure sample_data.py ran correctly.")
-        with client.session_transaction() as sess:
-            sess['_user_id'] = str(user.id)
-            sess['_fresh'] = True   
+    client.post('/log_user_in', data={
+        'email': 'admin@test.com',
+        'password': 'admin',
+        'remember': 'y'
+    }, follow_redirects=True)
     return client
 
 # Authenticate using an accountant user role
 @pytest.fixture
 def auth_accountant(client, app):
-    with app.app_context():
-        # Target the accountant user created by sample_data.py
-        user = User.query.filter_by(email="accountant1@test.com").first()
-        if not user:
-            pytest.fail("Accountant user not found. Ensure sample_data.py ran correctly.")
-        with client.session_transaction() as sess:
-            sess['_user_id'] = str(user.id)
-            sess['_fresh'] = True   
+    client.post('/log_user_in', data={
+        'email': 'accountant1@test.com',
+        'password': 'accountant',
+        'remember': 'y'
+    }, follow_redirects=True)
     return client
 
 # ------------------

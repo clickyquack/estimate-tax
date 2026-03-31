@@ -20,13 +20,13 @@
                 <div class="col-md-6">
                     <div class="card border-1 shadow-sm p-3">
                         <small class="text-muted text-uppercase fw-bold">Total Firms</small>
-                        <h3 class="fw-bold">X Firms</h3>
+                        <h3 class="fw-bold">{{ total_firms }} Firms</h3>
                     </div>
                 </div>
                 <div class="col-md-6">
                     <div class="card border-1 shadow-sm p-3">
                         <small class="text-muted text-uppercase fw-bold">Total Users</small>
-                        <h3 class="fw-bold">X Users</h3>
+                        <h3 class="fw-bold">{{ total_users }} Users</h3>
                     </div>
                 </div>
             </div>
@@ -42,6 +42,7 @@
                     <p class="text-muted">Manage server configurations and hosting settings.</p>
                 </div>
             </div>
+            <h4 class="text-danger text-center">This will likely just be done through the hosting service.</p>
         </div>
     </div>
 
@@ -50,9 +51,54 @@
         <div class="card-header bg-white pt-4 border-0">
             <div class="d-flex justify-content-center align-items-center mb-2">
                 <div class="text-center">
-                    <h1 class="fw-bold mb-0">Review System Audit Logs</h1>
-                    <p class="text-muted">View system audit logs.</p>
+                    <h1 class="fw-bold mb-0">System Audit Logs</h1>
+                    <p class="text-muted">Real-time track of all sensitive database mutations.</p>
                 </div>
+            </div>
+        </div>
+        <div class="card-body px-4 pb-4">
+            <div class="table-responsive" style="max-height: 75vh; overflow-y: auto; border: 1px solid #eee; border-radius: 8px;">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light sticky-top">
+                        <tr>
+                            <th class="">Timestamp</th>
+                            <th class="text-center">User</th>
+                            <th class="text-center">Action</th>
+                            <th class="text-center">Entity</th>
+                            <th class="text-end">IP Address</th>
+                        </tr>
+                    </thead>
+                    <tbody class="small">
+                        {% for log in logs %}
+                        <tr>
+                            <!-- Timestamp -->
+                            <td class="text-nowrap">{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                            <!-- User -->
+                            <td class="text-center">
+                                <span>
+                                    {{ log.user.name if log.user else "System" }} (ID: {{ log.user_id if log.user_id else "N/A" }})
+                                </span>
+                            </td>
+                            <!-- Action -->
+                            <td class="fw-bold text-center">{{ log.action }}</td>
+                            <!-- Entity -->
+                            <td class="text-center">
+                                {% if log.entity_type %}
+                                <span>{{ log.entity_type }} (ID: {{ log.entity_id }})</span>
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+                            <!-- IP Address -->
+                            <td class="font-monospace text-muted text-end">{{ log.ip_address }}</td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="5" class="text-center py-4 text-muted">No logs recorded yet.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
             </div>
         </div>
     </div>
@@ -67,6 +113,103 @@
                 </div>
             </div>
         </div>
+    
+        <div class="card border-0 shadow-sm mb-4 mx-4">
+            <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                <div class="d-flex align-items-center gap-4">
+                    <h5 class="mb-0 fw-bold">User Profiles</h5>
+                    <button class="btn btn-primary btn-sm" 
+                        hx-get="{{ url_for('sysadmin_add_user_form') }}"
+                        hx-target="#modal-content-placeholder" 
+                        data-bs-toggle="modal" 
+                        data-bs-target="#userModal">
+                        <i class="bi bi-person-plus-fill me-2"></i>Add User
+                    </button>
+                </div>
+                <div class="col-md-4">
+                    <input type="text" id="userSearch" class="form-control form-control-sm"
+                        placeholder="Search by name, email, or firm...">
+                </div>
+            </div>
+    
+            <div class="table-responsive" style="max-height: 75vh; overflow-y: auto;">
+                <table class="table table-hover align-middle mb-0" id="userTable">
+                    <thead class="table-light sticky-top">
+                        <tr>
+                            <th>Name</th>
+                            <th class="text-center">Firm</th>
+                            <th class="text-center">Role</th>
+                            <th class="text-center">Status</th>
+                            <th class="text-end pe-4">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for user in all_users %}
+                        <tr>
+                            <!-- Name and Email -->
+                            <td>
+                                <div class="fw-bold">{{ user.name }}</div>
+                                <small class="text-muted">{{ user.email }}</small>
+                            </td>
+                            <!-- Firm -->
+                            <td class="text-center">
+                                <span>
+                                    {{ user.firm.name }}
+                                </span>
+                            </td>
+                            <!-- Role -->
+                            <td class="text-center">
+                                {% if user.role.name == 'Developer' %}
+                                <span class="badge bg-danger-soft text-danger border border-danger-subtle px-3">
+                                    <i class="bi bi-code-slash me-1"></i> {{ user.role.name }}
+                                </span>
+                                {% elif user.role.name == 'SysAdmin' %}
+                                <span class="badge bg-warning-soft text-warning border border-warning-subtle px-3">
+                                    <i class="bi bi-shield-lock me-1"></i> {{ user.role.name }}
+                                </span>
+                                {% elif user.role.name == 'Admin' %}
+                                <span class="badge bg-primary-soft text-primary border border-primary-subtle px-3">
+                                    <i class="bi bi-person-badge me-1"></i> {{ user.role.name }}
+                                </span>
+                                {% else %}
+                                <span class="badge bg-dark-soft text-dark border border-dark-subtle px-3">
+                                    <i class="bi bi-person me-1"></i> {{ user.role.name }}
+                                </span>
+                                {% endif %}
+                            </td>
+                            <!-- Status -->
+                            <td class="text-center">
+                                {% if user.is_active %}
+                                <span class="badge bg-success-soft text-success border border-success-subtle">Active</span>
+                                {% else %}
+                                <span class="badge bg-danger-soft text-danger border border-danger-subtle">Inactive</span>
+                                {% endif %}
+                            </td>
+                            <!-- Actions -->
+                            <td class="text-end pe-4">
+                                <div class="btn-group">
+                                    <button class="btn btn-sm btn-outline-secondary"
+                                        hx-get="{{ url_for('sysadmin_edit_user', user_id=user.id) }}"
+                                        hx-target="#modal-content-placeholder" 
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#userModal">
+                                        <i class="bi bi-pencil"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="5" class="text-center py-5 text-muted">
+                                <i class="bi bi-people display-6 d-block mb-2"></i>
+                                No users found in the system.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
     </div>
 
     <!-- Manage Backups -->
@@ -78,12 +221,37 @@
                     <p class="text-muted">Create, restore, and manage system backups.</p>
                 </div>
             </div>
+            <h4 class="text-danger text-center">This will likely just be done through the hosting service.</p>
         </div>
     </div>
 
 </div>
 
 
+<!-- Edit User Popup -->
+<div class="modal fade" id="userModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div id="modal-content-placeholder" class="modal-content">
+            <div class="modal-body text-center p-5">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
-{% block scripts %}{% endblock %}
+{% block scripts %}
+<script>
+    document.getElementById('userSearch').addEventListener('keyup', function() {
+        let filter = this.value.toLowerCase();
+        let rows = document.querySelectorAll('#userTable tbody tr');
+        
+        rows.forEach(row => {
+            let text = row.innerText.toLowerCase();
+            row.style.display = text.includes(filter) ? '' : 'none';
+        });
+    });
+</script>
+{% endblock %}

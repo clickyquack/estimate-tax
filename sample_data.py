@@ -94,7 +94,9 @@ def generate_sample_data():
                 name=fake.company() if id_format == "##-#######" else fake.name(),
                 email=fake.company_email(),
                 tax_id=fake.numerify(text=id_format),
-                firm_id=test_firm.id
+                firm_id=test_firm.id,
+                address=fake.address(),
+                phone=fake.phone_number()
             )
             # Randomly assign to either Accountant
             client.users.append(random.choice([Accountant1, Accountant2]))

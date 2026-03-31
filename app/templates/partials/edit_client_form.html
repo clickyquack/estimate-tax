@@ -24,6 +24,16 @@
             </div>
 
             <div class="mb-3">
+                <label class="form-label small fw-bold text-muted">Phone Number</label>
+                <input type="text" name="phone" class="form-control" placeholder="(123) 456-7890" value="{{ client.phone or '' }}">
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label small fw-bold text-muted">Address</label>
+                <input name="address" class="form-control" placeholder="123 Main St" value="{{ client.address or '' }}"></input>
+            </div>
+
+            <div class="mb-3">
                 <label class="form-label small fw-bold text-muted">Tax ID (TIN / SSN)</label>
                 <input type="text" name="tax_id" class="form-control font-monospace" value="{{ client.tax_id or '' }}"
                     placeholder="00-0000000 or 000-00-0000" pattern="^([0-9]{2}-[0-9]{7}|[0-9]{3}-[0-9]{2}-[0-9]{4})?$"

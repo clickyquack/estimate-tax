@@ -1,0 +1,78 @@
+<div class="modal-content border-0">
+    <div class="modal-header border-0 pb-0">
+        <h5 class="modal-title fw-bold">Register System User</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+    </div>
+    <div class="modal-body">
+        <form hx-post="{{ url_for('sysadmin_create_user') }}" hx-target="#modal-content-placeholder" autocomplete="off">
+
+            {% if error %}
+            <div class="alert alert-danger py-2 small border-0 mb-3">
+                <i class="bi bi-exclamation-triangle-fill me-2"></i> {{ error }}
+            </div>
+            {% endif %}
+
+            <div class="mb-3">
+                <label class="form-label small fw-bold text-muted">Full Name</label>
+                <input type="text" name="name" class="form-control" placeholder="e.g. John Doe" required>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label small fw-bold text-muted">Email Address</label>
+                <input type="email" name="email" class="form-control" placeholder="user@example.com" required>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label small fw-bold text-muted">System Role</label>
+                <select name="role_name" class="form-select" required>
+                    <option value="Accountant" selected>Accountant</option>
+                    <option value="Admin">Admin</option>
+                    <option value="SysAdmin">SysAdmin</option>
+                    <option value="Developer">Developer</option>
+                </select>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label small fw-bold text-muted">Assign to Firm</label>
+                <select name="firm_id" class="form-select" required>
+                    <option value="" disabled selected>Select a firm...</option>
+                    {% for firm in all_firms %}
+                    <option value="{{ firm.id }}">{{ firm.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="mb-4">
+                <label class="form-label small fw-bold text-muted required">Initial Password</label>
+                <div class="input-group">
+                    <span class="input-group-text bg-light border-end-0">
+                        <i class="bi bi-shield-lock"></i>
+                    </span>
+                    <input type="password" id="new_global_pass" name="password" class="form-control border-start-0"
+                        placeholder="Minimum 8 characters" required minlength="8" autocomplete="new-password">
+                    <button class="btn btn-outline-secondary border-start-0" type="button" onclick="toggleGlobalPassword()">
+                        <i class="bi bi-eye" id="toggleGlobalIcon"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div class="d-grid">
+                <button type="submit" class="btn btn-primary">Create System User</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    function toggleGlobalPassword() {
+        const passInput = document.getElementById('new_global_pass');
+        const icon = document.getElementById('toggleGlobalIcon');
+        if (passInput.type === 'password') {
+            passInput.type = 'text';
+            icon.classList.replace('bi-eye', 'bi-eye-slash');
+        } else {
+            passInput.type = 'password';
+            icon.classList.replace('bi-eye-slash', 'bi-eye');
+        }
+    }
+</script>
