@@ -24,6 +24,10 @@ def log_action(action, entity_type=None, entity_id=None):
     db.session.add(new_log)
 
 
+# Initialize the rate limiter (attached to app later if not testing)
+limiter = Limiter(get_remote_address)
+
+
 
 def create_app():
     app = Flask(__name__)
@@ -46,7 +50,11 @@ def create_app():
     login_manager.init_app(app)
     login_manager.login_view = 'login'
 
-    limiter = Limiter(get_remote_address, app=app)
+    # Attach rate limiter only if not in testing mode
+    if app.config['TESTING']:
+        limiter.enabled = False
+    else:
+        limiter.init_app(app)
 
     # -------------------------------------
     # ------------ DECORATORS -------------

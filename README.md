@@ -11,6 +11,9 @@
 Set-ExecutionPolicy RemoteSigned -Scope Process
 venv\Scripts\activate
 
+# Generate New Sample Data
+python sample_data.py
+
 # Open index in browser
 start http://127.0.0.1:5000
 

@@ -9,6 +9,8 @@ class Config:
     # ----------- ENVIRONMENTAL VARIABLES -----------
     # -----------------------------------------------
 
+    TESTING = True
+
     SECRET_KEY = os.environ.get('SECRET_KEY')
     ENCRYPTION_KEY = os.environ.get('ENCRYPTION_KEY')
     
