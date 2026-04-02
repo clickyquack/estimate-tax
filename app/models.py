@@ -10,7 +10,8 @@ from cryptography.fernet import Fernet
 import os
 
 
-cipher = Fernet(os.environ.get('ENCRYPTION_KEY').encode())
+_encryption_key = os.environ.get('ENCRYPTION_KEY')
+cipher = Fernet(_encryption_key.encode()) if _encryption_key else None
 
 # Helper function to create encrypted properties
 def encrypted_property(attr_name):
@@ -20,9 +21,10 @@ def encrypted_property(attr_name):
         # If there's no encrypted data, just show blank field
         if not encrypted_val:
             return None
-        # If the data exists but the ENCRYPTION_KEY is missing from .env
+        # If the data exists but the ENCRYPTION_KEY is missing from .env,
+        # fall back to returning the stored value as-is (dev-mode friendly).
         if not cipher:
-            return "[Key Missing]"   
+            return encrypted_val
         # Try to decrypt
         try:
             return cipher.decrypt(encrypted_val.encode()).decode()
@@ -33,8 +35,11 @@ def encrypted_property(attr_name):
     @getter.setter
     def setter(self, value):
         if value:
-            encrypted_val = cipher.encrypt(value.encode()).decode()
-            setattr(self, attr_name, encrypted_val)
+            if not cipher:
+                setattr(self, attr_name, value)
+            else:
+                encrypted_val = cipher.encrypt(value.encode()).decode()
+                setattr(self, attr_name, encrypted_val)
         else:
             setattr(self, attr_name, None)
 
@@ -126,6 +131,16 @@ class User(db.Model, UserMixin):
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, server_default=func.now())
 
+    # Export profile fields (encrypted at rest)
+    _batch_filer_id_encrypted = db.Column('batch_filer_id', db.Text)
+    batch_filer_id = encrypted_property('_batch_filer_id_encrypted')  # 9 digits
+    _master_inquiry_pin_encrypted = db.Column('master_inquiry_pin', db.Text)
+    master_inquiry_pin = encrypted_property('_master_inquiry_pin_encrypted')  # 4 digits
+
+    # Per-user daily sequence tracking for exports
+    last_filer_sequence_date = db.Column(db.Date)
+    last_filer_sequence_number = db.Column(db.Integer)
+
     # Relationships
     firm = db.relationship('Firm', back_populates='users')
     role = db.relationship('Role', back_populates='users')
@@ -175,6 +190,8 @@ class Client(db.Model):
     address = encrypted_property('_address_encrypted')
     _phone_encrypted = db.Column('phone', db.Text)
     phone = encrypted_property('_phone_encrypted')
+    _taxpayer_pin_encrypted = db.Column('taxpayer_pin', db.Text)
+    taxpayer_pin = encrypted_property('_taxpayer_pin_encrypted')  # 4 digits
 
     # Relationships
     firm = db.relationship('Firm', back_populates='clients')

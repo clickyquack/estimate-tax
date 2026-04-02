@@ -1,4 +1,4 @@
-from flask import Flask, app, make_response, render_template, request, redirect, url_for, flash, abort
+from flask import Flask, app, make_response, render_template, request, redirect, url_for, flash, abort, Response
 from datetime import datetime
 
 from .extensions import db, login_manager
@@ -6,6 +6,7 @@ from config import Config
 
 from functools import wraps
 from flask_login import current_user, login_required, login_user, logout_user
+import re
 
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -203,6 +204,158 @@ def create_app():
     def get_overview_panel():
         return render_template('partials/overview_panel.html')
 
+    @app.route('/profile', methods=['GET', 'POST'])
+    @login_required
+    def profile():
+        if request.method == 'POST':
+            batch_filer_id = (request.form.get('batch_filer_id') or '').strip()
+            master_inquiry_pin = (request.form.get('master_inquiry_pin') or '').strip()
+
+            if not re.fullmatch(r"\d{9}", batch_filer_id):
+                return render_template('profile.html', error="Batch Filer ID must be exactly 9 digits.")
+            if not re.fullmatch(r"\d{4}", master_inquiry_pin):
+                return render_template('profile.html', error="Master Inquiry PIN must be exactly 4 digits.")
+
+            current_user.batch_filer_id = batch_filer_id
+            current_user.master_inquiry_pin = master_inquiry_pin
+            db.session.commit()
+            flash("Export settings saved.", "success")
+            return redirect(url_for('profile'))
+
+        return render_template('profile.html')
+
+    def _digits_only(value: str) -> str:
+        return re.sub(r"\D+", "", value or "")
+
+    def _fixed_width(value: str, length: int, *, pad: str = " ", align: str = "left") -> str:
+        text = value or ""
+        if len(text) > length:
+            text = text[:length]
+        if align == "right":
+            return text.rjust(length, pad)
+        return text.ljust(length, pad)
+
+    @app.route('/export/fixed-width', methods=['GET'])
+    @login_required
+    def export_fixed_width():
+        from .models import ScheduledPayment, PaymentSchedule, TaxRecord, Client, Export
+        from decimal import Decimal, ROUND_HALF_UP
+        from sqlalchemy.orm import joinedload
+
+        file_date_raw = (request.args.get('file_date') or '').strip()
+        try:
+            file_date = datetime.strptime(file_date_raw, "%Y-%m-%d").date()
+        except ValueError:
+            return "file_date must be YYYY-MM-DD", 400
+
+        batch_filer_id = _digits_only(current_user.batch_filer_id)
+        master_pin = _digits_only(current_user.master_inquiry_pin)
+        if not re.fullmatch(r"\d{9}", batch_filer_id):
+            return "Batch Filer ID must be set to 9 digits in profile.", 400
+        if not re.fullmatch(r"\d{4}", master_pin):
+            return "Master Inquiry PIN must be set to 4 digits in profile.", 400
+
+        # Allocate per-user filer sequence number for this file_date
+        if current_user.last_filer_sequence_date == file_date:
+            next_seq = (current_user.last_filer_sequence_number or 0) + 1
+        else:
+            next_seq = 1
+        if next_seq > 999:
+            return "Filer Sequence Number exceeded 999 for this date.", 400
+        current_user.last_filer_sequence_date = file_date
+        current_user.last_filer_sequence_number = next_seq
+
+        payments = (
+            ScheduledPayment.query
+            .options(
+                joinedload(ScheduledPayment.schedule)
+                .joinedload(PaymentSchedule.tax_record)
+                .joinedload(TaxRecord.client)
+            )
+            .join(PaymentSchedule, ScheduledPayment.schedule_id == PaymentSchedule.id)
+            .join(TaxRecord, PaymentSchedule.tax_record_id == TaxRecord.id)
+            .join(Client, TaxRecord.client_id == Client.id)
+            .filter(
+                Client.firm_id == current_user.firm_id,
+                ScheduledPayment.input_date == file_date,
+                ScheduledPayment.status == 'pending',
+            )
+            .order_by(ScheduledPayment.id.asc())
+            .all()
+        )
+
+        if not payments:
+            return "No pending payments found for that file date.", 400
+
+        lines = []
+        payment_ref = 1
+        for p in payments:
+            tr = p.schedule.tax_record
+            c = tr.client
+
+            tin = _digits_only(c.tax_id)
+            if not re.fullmatch(r"\d{9}", tin):
+                return f"Client {c.id} has invalid TIN; must be 9 digits.", 400
+
+            taxpayer_pin = _digits_only(c.taxpayer_pin)
+            if not re.fullmatch(r"\d{4}", taxpayer_pin):
+                return f"Client {c.id} is missing a valid Taxpayer PIN (4 digits).", 400
+
+            taxpayer_type = (tr.taxpayer_type or "").strip().upper()
+            if taxpayer_type not in {"B", "I"}:
+                return f"Taxpayer Type Code must be B or I for client {c.id}.", 400
+
+            tax_type_code = _digits_only(tr.tax_type_code)
+            if not re.fullmatch(r"\d{5}", tax_type_code):
+                return f"Tax Type Code must be 5 digits for client {c.id}.", 400
+
+            tax_period = _digits_only(p.tax_period)
+            if not re.fullmatch(r"\d{6}", tax_period):
+                return f"Tax Period must be YYYYMM for client {c.id}.", 400
+            month = int(tax_period[4:6])
+            if month < 1 or month > 12:
+                return f"Tax Period month must be 01-12 for client {c.id}.", 400
+
+            if not p.due_date:
+                return f"Settlement Date missing for client {c.id}.", 400
+
+            amount = Decimal(str(p.amount)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            if amount <= 0 or amount >= Decimal("100000000"):
+                return f"Payment Amount out of range for client {c.id}.", 400
+            amount_cents = int((amount * 100).to_integral_value(rounding=ROUND_HALF_UP))
+
+            line = (
+                _fixed_width(batch_filer_id, 9, pad="0", align="right") +
+                _fixed_width(master_pin, 4, pad="0", align="right") +
+                _fixed_width(file_date.strftime("%Y%m%d"), 8, pad="0", align="right") +
+                _fixed_width(str(next_seq), 3, pad="0", align="right") +
+                _fixed_width(str(payment_ref), 4, pad="0", align="right") +
+                _fixed_width("P", 1) +
+                _fixed_width(tin, 9, pad="0", align="right") +
+                _fixed_width(taxpayer_pin, 4, pad="0", align="right") +
+                _fixed_width(taxpayer_type, 1) +
+                _fixed_width(tax_type_code, 5, pad="0", align="right") +
+                _fixed_width(tax_period, 6, pad="0", align="right") +
+                _fixed_width(p.due_date.strftime("%Y%m%d"), 8, pad="0", align="right") +
+                _fixed_width(str(amount_cents), 15, pad="0", align="right")
+            )
+
+            lines.append(line)
+            payment_ref += 1
+
+        export_record = Export(user_id=current_user.id, status="generated")
+        export_record.payments = payments
+        db.session.add(export_record)
+        db.session.commit()
+
+        content = "\n".join(lines) + "\n"
+        filename = f"estimate_tax_{current_user.firm_id}_{file_date.strftime('%Y%m%d')}_{str(next_seq).zfill(3)}.txt"
+        return Response(
+            content,
+            mimetype="text/plain",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+
     @app.route('/get-client-partial/<int:client_id>')
     @login_required
     def get_client_panel(client_id):
@@ -243,6 +396,9 @@ def create_app():
         tax_year = request.form.get('tax_period', '')[:4] # Extract YYYY from YYYYMM
         settlement_date = request.form.get('settlement_date', '')
         tax_period = request.form.get('tax_period', '').strip()
+        tax_type_code = (request.form.get('tax_type_code') or '').strip()
+        tin_raw = (request.form.get('tin') or '').strip()
+        tin_digits = re.sub(r"\D+", "", tin_raw)
 
         # Validation Logic
         try:
@@ -252,8 +408,28 @@ def create_app():
             response = make_response('<div class="alert alert-danger">Check your date/amount format.</div>', 200)
             return response
 
+        if not re.fullmatch(r"\d{9}", tin_digits):
+            response = make_response('<div class="alert alert-danger">TIN must be 9 digits.</div>', 200)
+            return response
+
+        if not re.fullmatch(r"\d{5}", re.sub(r"\D+", "", tax_type_code)):
+            response = make_response('<div class="alert alert-danger">Tax Type Code must be 5 digits.</div>', 200)
+            return response
+
+        tax_period_digits = re.sub(r"\D+", "", tax_period)
+        if not re.fullmatch(r"\d{6}", tax_period_digits):
+            response = make_response('<div class="alert alert-danger">Tax Period must be YYYYMM.</div>', 200)
+            return response
+        month = int(tax_period_digits[4:6])
+        if month < 1 or month > 12:
+            response = make_response('<div class="alert alert-danger">Tax Period month must be 01-12.</div>', 200)
+            return response
+
         # Save to Database
         try:
+            # Keep the client's stored TIN in sync with the tax input.
+            client.tax_id = tin_raw
+
             # Create the Record
             new_record = TaxRecord(
                 client_id=client.id,
@@ -261,7 +437,7 @@ def create_app():
                 estimated_tax_total=payment_amount,
                 uploaded_by=current_user.id,
                 tax_form=request.form.get('tax_form', '1040'),
-                tax_type_code=request.form.get('tax_type', 'ES'),
+                tax_type_code=re.sub(r"\D+", "", tax_type_code),
                 taxpayer_type=request.form.get('taxpayer_type_code', 'I'),
                 description=request.form.get('tax_form_description', '').strip() or None
             )
@@ -279,7 +455,7 @@ def create_app():
                 amount=payment_amount,
                 status='pending',
                 eft_number=request.form.get('eft_number', '').strip(),
-                tax_period=tax_period,
+                tax_period=tax_period_digits,
                 input_method=request.form.get('payment_input_method', 'B'),
 
                 original_eft_number=request.form.get('original_eft_number', '').strip() or None,
@@ -354,6 +530,7 @@ def create_app():
         client.phone = request.form.get('phone')
         client.address = request.form.get('address')
         client.tax_id = request.form.get('tax_id')
+        client.taxpayer_pin = request.form.get('taxpayer_pin')
         # Update Assignments
         selected_accountant_ids = request.form.getlist('accountant_ids')
         selected_users = User.query.filter(User.id.in_(selected_accountant_ids)).all()
@@ -401,6 +578,7 @@ def create_app():
             phone=request.form.get('phone'),
             address=request.form.get('address'),
             tax_id=request.form.get('tax_id'),
+            taxpayer_pin=request.form.get('taxpayer_pin'),
             firm_id=current_user.firm_id
         )
     
