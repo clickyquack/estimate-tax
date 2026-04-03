@@ -17,22 +17,28 @@
             </div>
 
             <div class="row g-3 mb-4 text-center">
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <div class="card border-1 shadow-sm p-3">
                         <small class="text-muted text-uppercase fw-bold">Total Clients</small>
                         <h3 class="fw-bold">{{ clients|length }}</h3>
                     </div>
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <div class="card border-1 shadow-sm p-3">
                         <small class="text-muted text-uppercase fw-bold">Accountants</small>
                         <h3 class="fw-bold">{{ accountants|length }}</h3>
                     </div>
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <div class="card border-1 shadow-sm p-3">
-                        <small class="text-muted text-uppercase fw-bold">Next Payment</small>
-                        <h3 class="fw-bold">X days</h3>
+                        <small class="text-muted text-uppercase fw-bold">Next Payment Date</small>
+                        <h3 class="fw-bold">{{ next_payment_date }}</h3>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card border-1 shadow-sm p-3">
+                        <small class="text-muted text-uppercase fw-bold">Next Payment Amount</small>
+                        <h3 class="fw-bold">${{ payment_amount }}</h3>
                     </div>
                 </div>
             </div>
@@ -207,14 +213,23 @@
     <!-- Billing and Security -->
     <div class="card border-0 shadow-sm mb-4">
         <div class="card-header bg-white pt-4 border-0">
-            <div class="d-flex justify-content-center align-items-center mb-2">
+            <div class="d-flex justify-content-center align-items-center mb-0">
                 <div class="text-center">
-                    <h1 class="fw-bold mb-0">Billing and Security</h1>
-                    <p class="text-muted">Manage billing, security settings.</p>
+                    <h1 class="fw-bold mb-0">Billing and Payments</h1>
+                    <p class="text-muted">Manage your subscription and payment methods.</p>
                 </div>
+            </div>
+            <div class="d-flex justify-content-center mb-4">
+                <form action="{{ url_for('billing_portal') }}" method="POST" class="mt-4">
+                    <button type="submit" class="btn btn-primary fw-bold px-4 py-2">
+                        Open Billing Portal <i class="bi bi-box-arrow-up-right ms-2"></i>
+                    </button>
+                </form>
             </div>
         </div>
     </div>
+
+
 </div>
 
 <!-- Edit Client Popup -->

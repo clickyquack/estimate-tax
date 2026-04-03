@@ -85,6 +85,7 @@ class Firm(db.Model):
     plan_type = db.Column(db.String(50))
     status = db.Column(db.String(50))
     created_at = db.Column(db.DateTime, server_default=func.now())
+    stripe_customer_id = db.Column(db.String(255))
 
     # Relationships
     users = db.relationship('User', back_populates='firm', cascade='all, delete-orphan')
