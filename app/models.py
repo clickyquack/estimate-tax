@@ -213,6 +213,8 @@ class TaxRecord(db.Model):
     # --- Added field ---
     tax_form = db.Column(db.String(10), nullable=False)
     tax_type_code = db.Column(db.String(5), nullable=False)
+    # Short tax type label (e.g. ES for estimated tax), separate from numeric tax_type_code
+    tax_type = db.Column(db.String(50))
     taxpayer_type = db.Column(db.String(1), nullable=False)
     description = db.Column(db.String(255))
 
