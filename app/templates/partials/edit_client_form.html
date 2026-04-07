@@ -43,7 +43,7 @@
             <div class="mb-3">
                 <label class="form-label small fw-bold text-muted">Taxpayer PIN</label>
                 <input type="text" name="taxpayer_pin" class="form-control font-monospace" value="{{ client.taxpayer_pin or '' }}"
-                    placeholder="4 digits" pattern="^\d{4}$" maxlength="4">
+                    placeholder="4 digits" pattern="^\d{4}$" maxlength="4" required>
             </div>
 
             <div class="mb-4">

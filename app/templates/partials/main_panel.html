@@ -47,13 +47,18 @@
                                 pattern="^([0-9]{2}-[0-9]{7}|[0-9]{3}-[0-9]{2}-[0-9]{4})?$" placeholder="00-0000000 or 000-00-0000">
                             </div>
                         <div class="col-md-4">
+                            <label for="taxpayer_pin" class="form-label">Taxpayer PIN</label>
+                            <input type="text" id="taxpayer_pin" name="taxpayer_pin" class="form-control font-monospace"
+                                value="{{ client.taxpayer_pin or '' }}" placeholder="4 digits" pattern="^\d{4}$" maxlength="4" required>
+                        </div>
+                        <div class="col-md-4">
                             <label class="form-label d-block">Taxpayer Type</label>
                             <input type="hidden" name="taxpayer_type_code" id="taxpayer_type_code"
-                                value="{% if latest_record %}{{ latest_record.taxpayer_type }}{% else %}I{% endif %}">
+                                value="{% if latest_record %}{{ latest_record.taxpayer_type }}{% else %}{{ default_taxpayer_type or 'I' }}{% endif %}">
                             <div class="taxpayer-type-toggle" role="group" aria-label="Taxpayer type">
-                                <button type="button" class="taxpayer-toggle-btn {% if not latest_record or latest_record.taxpayer_type == 'I' %}active{% endif %}"
+                                <button type="button" class="taxpayer-toggle-btn {% if latest_record %}{% if latest_record.taxpayer_type == 'I' %}active{% endif %}{% else %}{% if (default_taxpayer_type or 'I') == 'I' %}active{% endif %}{% endif %}"
                                     data-type="I" id="btnTaxpayerI" title="Individual">I</button>
-                                <button type="button" class="taxpayer-toggle-btn {% if latest_record and latest_record.taxpayer_type == 'B' %}active{% endif %}"
+                                <button type="button" class="taxpayer-toggle-btn {% if latest_record %}{% if latest_record.taxpayer_type == 'B' %}active{% endif %}{% else %}{% if (default_taxpayer_type or 'I') == 'B' %}active{% endif %}{% endif %}"
                                     data-type="B" id="btnTaxpayerB" title="Business">B</button>
                             </div>
                         </div>
@@ -87,7 +92,7 @@
                         <div class="col-md-4">
                             <label for="total_payment_amount" class="form-label">Total Payment Amount</label>
                             <input type="number" id="total_payment_amount" name="total_payment_amount"
-                                class="form-control" required step="0.01" min="0.01" placeholder="Dollar amount"
+                                class="form-control" required step="1" min="1" placeholder="Whole dollars"
                                 value="{{ latest_payment.amount if latest_payment and latest_payment.amount else '' }}">
                         </div>
                         <div class="col-md-4">
@@ -115,7 +120,7 @@
                     <div>
                         <label for="export_split_period" class="form-label mb-1">Split into</label>
                         <select id="export_split_period" class="form-select" autocomplete="off"
-                            onchange="var h=document.getElementById('schedule_period_sync'); if(h) h.value=this.value;">
+                            onchange="var h=document.getElementById('schedule_period_sync'); if(h) h.value=this.value; var e=document.getElementById('export_period_sync'); if(e) e.value=this.value;">
                             <option value="" selected>None</option>
                             <option value="quarterly">Quarterly</option>
                             <option value="monthly">Monthly</option>
@@ -123,59 +128,16 @@
                             <option value="weekly">Weekly</option>
                         </select>
                     </div>
-                    <form id="export-download" method="get" action="{{ url_for('export_fixed_width') }}" class="d-flex flex-wrap align-items-end gap-3" target="_blank">
+                    <form id="export-download" method="post" action="{{ url_for('export_auto') }}" class="d-flex flex-wrap align-items-end gap-3" target="_blank">
                         <input type="hidden" name="client_id" value="{{ client.id }}">
-                        <div>
-                            <label for="export_date" class="form-label mb-1">File date</label>
-                            <input type="date" id="export_date" name="file_date" class="form-control"
-                                value="{{ default_input_date }}" required>
-                        </div>
+                        <input type="hidden" name="period" id="export_period_sync" value="">
                         <button type="submit" class="btn btn-primary px-4">Export</button>
                     </form>
                 </div>
 
-                <hr class="my-4">
-
-                <h3 class="h6 fw-bold text-center mb-3">Generate payment schedule</h3>
-                <form id="schedule-generate-form" hx-post="{{ url_for('generate_export_schedule') }}" hx-target="#export-schedule-feedback" hx-swap="innerHTML">
-                    <input type="hidden" name="client_id" value="{{ client.id }}">
-                    <input type="hidden" name="period" id="schedule_period_sync" value="">
-
-                    <div class="row g-3 justify-content-center">
-                        <div class="col-md-3">
-                            <label class="form-label">Total for year ($)</label>
-                            <input type="number" name="total_annual_amount" class="form-control" required
-                                min="0.01" step="0.01" placeholder="e.g. 12000.00">
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label">Calendar year</label>
-                            <input type="number" name="calendar_year" class="form-control" required min="2000" max="2100"
-                                value="{{ default_input_date[:4] }}">
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label">Tax Type Code</label>
-                            <input type="text" name="schedule_tax_type_code" class="form-control font-monospace"
-                                pattern="^\d{5}$" maxlength="5" placeholder="5 digits" required
-                                value="{{ latest_record.tax_type_code if latest_record and latest_record.tax_type_code else '' }}">
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label">Tax form</label>
-                            <input type="text" name="schedule_tax_form" class="form-control" value="{{ latest_record.tax_form if latest_record and latest_record.tax_form else '1040' }}">
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label">Taxpayer type</label>
-                            <select name="schedule_taxpayer_type" class="form-select">
-                                <option value="I" {% if not latest_record or latest_record.taxpayer_type == 'I' %}selected{% endif %}>Individual</option>
-                                <option value="B" {% if latest_record and latest_record.taxpayer_type == 'B' %}selected{% endif %}>Business</option>
-                            </select>
-                        </div>
-                        <div class="col-12 text-center mt-2">
-                            <button type="submit" class="btn btn-outline-primary">Generate payment schedule</button>
-                        </div>
-                    </div>
-                </form>
-
-                <div id="export-schedule-feedback" class="mt-4"></div>
+                <div class="text-muted small text-center">
+                    Export will automatically generate the schedule for the selected split period using the client’s saved tax data.
+                </div>
             </div>
         </div>
     </div>
