@@ -40,6 +40,13 @@
                 <div class="form-text small">Optional. Accepts Business EIN or Personal SSN.</div>
             </div>
 
+            <div class="mb-3">
+                <label class="form-label small fw-bold text-muted">Taxpayer PIN</label>
+                <input type="text" name="taxpayer_pin" class="form-control font-monospace"
+                    placeholder="4 digits" pattern="^\d{4}$" maxlength="4">
+                <div class="form-text small">Required for exports.</div>
+            </div>
+
             <div class="mb-4">
                 <label class="form-label small fw-bold text-muted">Assign to Accountants</label>
                 <div class="border rounded p-2 bg-light" style="max-height: 120px; overflow-y: auto;">
