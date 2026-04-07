@@ -94,33 +94,10 @@
                 root.querySelectorAll('.taxpayer-toggle-btn').forEach(function (b) {
                     b.classList.toggle('active', b.getAttribute('data-type') === v);
                 });
-                var ttc = root.querySelector('#tax_type_code');
-                var tf = root.querySelector('#tax_form');
-                if (ttc) {
-                    ttc.required = (v === 'I');
-                    if (v === 'I') {
-                        ttc.setAttribute('pattern', '^\\d{5}$');
-                    } else {
-                        ttc.removeAttribute('pattern');
-                    }
-                }
-                if (tf) tf.required = (v === 'I');
             }
 
             function setType(t) {
                 hidden.value = t;
-                var ttc = root.querySelector('#tax_type_code');
-                var tf = root.querySelector('#tax_form');
-                var tt = root.querySelector('#tax_type');
-                if (t === 'I') {
-                    if (ttc) ttc.value = '10406';
-                    if (tf) tf.value = '1040';
-                    if (tt && !String(tt.value || '').trim()) tt.value = 'ES';
-                } else {
-                    if (ttc) ttc.value = '';
-                    if (tf) tf.value = '';
-                    if (tt) tt.value = '';
-                }
                 syncTaxpayer();
             }
 
@@ -133,16 +110,7 @@
             });
             btnB.addEventListener('click', function () { setType('B'); });
 
-            var ttc0 = root.querySelector('#tax_type_code');
-            var tt0 = root.querySelector('#tax_type');
-            if (hidden.value === 'I' && ttc0 && !String(ttc0.value || '').trim()) {
-                setType('I');
-            } else {
-                if (hidden.value === 'I' && tt0 && !String(tt0.value || '').trim()) {
-                    tt0.value = 'ES';
-                }
-                syncTaxpayer();
-            }
+            syncTaxpayer();
         }
 
         document.addEventListener('DOMContentLoaded', initMainPanelTaxpayer);

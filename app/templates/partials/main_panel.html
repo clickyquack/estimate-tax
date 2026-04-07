@@ -63,25 +63,6 @@
                             </div>
                         </div>
                         <div class="col-md-4">
-                            <label for="tax_form" class="form-label">Tax Form</label>
-                            <input type="text" id="tax_form" name="tax_form" class="form-control"
-                                value="{{ latest_record.tax_form if latest_record and latest_record.tax_form else '' }}">
-                        </div>
-
-                        <div class="col-md-4">
-                            <label for="tax_type" class="form-label">Tax Type</label>
-                            <input type="text" id="tax_type" name="tax_type" class="form-control" maxlength="50"
-                                placeholder="e.g. ES"
-                                value="{{ latest_record.tax_type if latest_record and latest_record.tax_type else '' }}">
-                        </div>
-                        <div class="col-md-4">
-                            <label for="tax_type_code" class="form-label">Tax Type Code</label>
-                            <input type="text" id="tax_type_code" name="tax_type_code" class="form-control font-monospace"
-                                pattern="^\d{5}$" maxlength="5" placeholder="5 digits"
-                                value="{{ latest_record.tax_type_code if latest_record and latest_record.tax_type_code else '' }}">
-                            <div class="form-text small">5-digit code on the export line.</div>
-                        </div>
-                        <div class="col-md-4">
                             <label for="tax_period" class="form-label">Tax Period</label>
                             <input type="text" id="tax_period" name="tax_period" class="form-control font-monospace" required
                                 pattern="^(\d{4}|\d{6})$" maxlength="6" placeholder="YYYY or YYYYMM"
@@ -131,6 +112,11 @@
                     <form id="export-download" method="post" action="{{ url_for('export_auto') }}" class="d-flex flex-wrap align-items-end gap-3" target="_blank">
                         <input type="hidden" name="client_id" value="{{ client.id }}">
                         <input type="hidden" name="period" id="export_period_sync" value="">
+                        <div>
+                            <label for="first_payment_date" class="form-label mb-1">First payment date (optional)</label>
+                            <input type="date" id="first_payment_date" name="first_payment_date" class="form-control"
+                                value="">
+                        </div>
                         <button type="submit" class="btn btn-primary px-4">Export</button>
                     </form>
                 </div>

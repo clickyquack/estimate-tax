@@ -295,13 +295,44 @@ def create_app():
             nfd = date(y, m + 1, 1)
         return (nfd - timedelta(days=1)).day
 
-    def _payment_dates_for_period(calendar_year: int, period: str, start: date, end: date):
+    def _payment_dates_for_period(calendar_year: int, period: str, start: date, end: date, *, first_payment_date: date | None = None):
         """Return sorted unique payment dates in [start, end] for the given cadence."""
         period = (period or "").strip().lower()
         if start > end:
             return []
 
+        def _add_months(d: date, months: int) -> date:
+            y = d.year + (d.month - 1 + months) // 12
+            m = (d.month - 1 + months) % 12 + 1
+            ld = _last_day_of_month(y, m)
+            return date(y, m, min(d.day, ld))
+
+        def _anchored_dates(step_days: int | None = None, step_months: int | None = None):
+            if not first_payment_date:
+                return None
+            d = first_payment_date
+            out = []
+            # Step forward until we're within [start, end]
+            guard = 0
+            while d < start and guard < 2000:
+                if step_days is not None:
+                    d = d + timedelta(days=step_days)
+                else:
+                    d = _add_months(d, int(step_months or 0))
+                guard += 1
+            while d <= end and guard < 4000:
+                out.append(d)
+                if step_days is not None:
+                    d = d + timedelta(days=step_days)
+                else:
+                    d = _add_months(d, int(step_months or 0))
+                guard += 1
+            return out
+
         if period == "weekly":
+            anchored = _anchored_dates(step_days=7)
+            if anchored is not None:
+                return anchored
             # End of week = Saturday.
             # Find first Saturday on/after start, then step by 7 days.
             days_until_sat = (5 - start.weekday()) % 7  # Mon=0 ... Sat=5
@@ -313,6 +344,9 @@ def create_app():
             return out
 
         if period == "biweekly":
+            anchored = _anchored_dates(step_days=14)
+            if anchored is not None:
+                return anchored
             # End of week = Saturday, every other week.
             days_until_sat = (5 - start.weekday()) % 7
             d = start + timedelta(days=days_until_sat)
@@ -323,6 +357,9 @@ def create_app():
             return out
 
         if period == "monthly":
+            anchored = _anchored_dates(step_months=1)
+            if anchored is not None:
+                return anchored
             out = []
             y, m = start.year, start.month
             while (y < end.year) or (y == end.year and m <= end.month):
@@ -339,6 +376,9 @@ def create_app():
             return out
 
         if period == "quarterly":
+            anchored = _anchored_dates(step_months=3)
+            if anchored is not None:
+                return anchored
             candidates = [
                 date(calendar_year, 3, 31),
                 date(calendar_year, 6, 30),
@@ -605,6 +645,13 @@ def create_app():
             period = ""
 
         today = date.today()
+        first_payment_date_raw = (request.form.get("first_payment_date") or "").strip()
+        first_payment_date = None
+        if first_payment_date_raw:
+            try:
+                first_payment_date = datetime.strptime(first_payment_date_raw, "%Y-%m-%d").date()
+            except ValueError:
+                return make_response('<div class="alert alert-danger py-2 small">First payment date must be YYYY-MM-DD.</div>', 200)
 
         schedule_id = None
 
@@ -646,21 +693,12 @@ def create_app():
             if taxpayer_type not in {"B", "I"}:
                 taxpayer_type = infer_taxpayer_type_from_tin(client.tax_id)
 
-            tax_form_in = (latest_record.tax_form or "").strip()
-            tax_type_code_in = re.sub(r"\D+", "", (latest_record.tax_type_code or "").strip())
-            if taxpayer_type == "I":
-                if not tax_form_in:
-                    tax_form_in = "1040"
-                if not re.fullmatch(r"\d{5}", tax_type_code_in):
-                    return make_response('<div class="alert alert-danger py-2 small">Saved Tax Type Code must be 5 digits.</div>', 200)
-            else:
-                # Business: allow empty (export will output 00000 when empty)
-                if tax_type_code_in and not re.fullmatch(r"\d{5}", tax_type_code_in):
-                    return make_response('<div class="alert alert-danger py-2 small">Saved Tax Type Code must be 5 digits (or empty for business).</div>', 200)
+            tax_form_in = "1040"
+            tax_type_code_in = "10406"
 
             year_start = date(calendar_year, 1, 1)
             year_end = date(calendar_year, 12, 31)
-            pay_dates = _payment_dates_for_period(calendar_year, period, year_start, year_end)
+            pay_dates = _payment_dates_for_period(calendar_year, period, year_start, year_end, first_payment_date=first_payment_date)
             if not pay_dates:
                 return make_response('<div class="alert alert-danger py-2 small">No payment dates could be generated for that period.</div>', 200)
             if len(pay_dates) > 400:
@@ -671,7 +709,13 @@ def create_app():
                 return make_response('<div class="alert alert-danger py-2 small">Saved annual total is too small for this many payments (each installment must be at least $1).</div>', 200)
 
             try:
-                dollar_parts = _split_total_dollars_by_quarter_targets(calendar_year, year_start, pay_dates, total_dollars)
+                if period == "quarterly":
+                    dollar_parts = _split_total_dollars_by_quarter_targets(calendar_year, year_start, pay_dates, total_dollars)
+                else:
+                    # Even split across the generated payments (whole dollars).
+                    base = total_dollars // len(pay_dates)
+                    rem = total_dollars % len(pay_dates)
+                    dollar_parts = [base + (1 if i < rem else 0) for i in range(len(pay_dates))]
             except Exception:
                 return make_response('<div class="alert alert-danger py-2 small">Could not split payment amounts.</div>', 200)
 
@@ -806,11 +850,7 @@ def create_app():
             if taxpayer_type not in {"B", "I"}:
                 return f"Taxpayer Type Code must be B or I for client {c.id}.", 400
 
-            tax_type_code = _digits_only(tr_export.tax_type_code)
-            if not tax_type_code:
-                tax_type_code = "00000"
-            elif not re.fullmatch(r"\d{5}", tax_type_code):
-                return f"Tax Type Code must be 5 digits (or empty for business) for client {c.id}.", 400
+            tax_type_code = "10406"
 
             tax_period = _digits_only(p.tax_period)
             if not re.fullmatch(r"\d{6}", tax_period):
@@ -1051,7 +1091,6 @@ def create_app():
         amount = request.form.get('total_payment_amount', '0')
         settlement_date = request.form.get('settlement_date', '')
         tax_period_raw = request.form.get('tax_period', '').strip()
-        tax_type_code = (request.form.get('tax_type_code') or '').strip()
         tin_raw = (request.form.get('tin') or '').strip()
         tin_digits = re.sub(r"\D+", "", tin_raw)
         pin_raw = (request.form.get('taxpayer_pin') or '').strip()
@@ -1088,25 +1127,10 @@ def create_app():
             )
             return response
 
-        ttc_digits = re.sub(r"\D+", "", tax_type_code)
-        if taxpayer_type == 'B':
-            if ttc_digits and not re.fullmatch(r"\d{5}", ttc_digits):
-                response = make_response('<div class="alert alert-danger">Tax Type Code must be 5 digits or empty.</div>', 200)
-                return response
-            tax_type_code_stored = ttc_digits if ttc_digits else ''
-            tax_form_val = (request.form.get('tax_form') or '').strip()
-        else:
-            if not re.fullmatch(r"\d{5}", ttc_digits):
-                response = make_response('<div class="alert alert-danger">Tax Type Code must be 5 digits.</div>', 200)
-                return response
-            tax_type_code_stored = ttc_digits
-            tax_form_val = (request.form.get('tax_form') or '').strip() or '1040'
-
-        tax_type_label = (request.form.get('tax_type') or '').strip()
-        if taxpayer_type == 'I':
-            tax_type_label = tax_type_label or 'ES'
-        else:
-            tax_type_label = tax_type_label or None
+        # Tax metadata is fixed for this app.
+        tax_type_code_stored = "10406"
+        tax_form_val = "1040"
+        tax_type_label = "ES"
 
         # Save to Database
         try:
