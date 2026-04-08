@@ -109,7 +109,7 @@
                     <form id="export-download" method="get" action="{{ url_for('export_fixed_width') }}" class="d-flex flex-wrap align-items-end gap-3" target="_blank">
                         <input type="hidden" name="schedule_id" id="export_schedule_id" value="">
                         <input type="hidden" name="file_date" value="{{ default_input_date }}">
-                        <button type="submit" class="btn btn-primary px-4">Export</button>
+                        <button type="submit" id="btnExportSchedule" class="btn btn-primary px-4" disabled title="Generate payments first">Export</button>
                     </form>
                 </div>
 

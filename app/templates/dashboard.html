@@ -104,7 +104,12 @@
             if (ev.target && ev.target.id === 'export-schedule-feedback') {
                 var sid = ev.target.querySelector('#generated_schedule_id');
                 var out = document.getElementById('export_schedule_id');
+                var btn = document.getElementById('btnExportSchedule');
                 if (sid && out) out.value = sid.value || '';
+                if (btn) {
+                    btn.disabled = !(sid && sid.value);
+                    btn.title = btn.disabled ? 'Generate payments first' : 'Download export for this schedule';
+                }
             }
         });
     </script>

@@ -72,6 +72,16 @@ def _require_4_digit_pin(pin_raw: str):
     return pin
 
 
+def _normalize_ssn_optional(raw):
+    """Return (9-digit SSN or None if empty, error message or None). Hyphens/formatting stripped."""
+    d = _digits_only(raw or "")
+    if not d:
+        return None, None
+    if not re.fullmatch(r"\d{9}", d):
+        return None, "SSN must be exactly 9 digits."
+    return d, None
+
+
 def _ensure_default_roles() -> None:
     """Seed roles table on fresh databases (create_all does not insert rows). Registration requires Admin."""
     from .models import Role
@@ -871,17 +881,18 @@ def create_app():
                 db.session.rollback()
                 return make_response('<div class="alert alert-danger py-2 small">Could not save schedule. Check saved tax data and try again.</div>', 200)
 
-        # If we generated a schedule, export ONLY that schedule. Otherwise export pending payments for the client.
         if schedule_id:
             return redirect(url_for("export_fixed_width", schedule_id=schedule_id, file_date=today.strftime("%Y-%m-%d")))
-        return redirect(url_for("export_fixed_width", client_id=client.id, file_date=today.strftime("%Y-%m-%d")))
+        return (
+            "Choose a split period and generate payments before exporting (export requires a schedule).",
+            400,
+        )
 
     @app.route('/export/fixed-width', methods=['GET'])
     @login_required
     def export_fixed_width():
         from .models import ScheduledPayment, PaymentSchedule, TaxRecord, Client, Export
         from decimal import Decimal, ROUND_HALF_UP
-        from sqlalchemy.orm import joinedload
 
         file_date_raw = (request.args.get('file_date') or '').strip()
         try:
@@ -889,9 +900,26 @@ def create_app():
         except ValueError:
             return "file_date must be YYYY-MM-DD", 400
 
-        client_id_filter = request.args.get("client_id", type=int)
         schedule_id_filter = request.args.get("schedule_id", type=int)
         export_all_dates = (request.args.get("all_dates") or "").strip() in {"1", "true", "yes"}
+
+        if schedule_id_filter is None:
+            return (
+                "Export requires schedule_id (generate payments for this client, then export that schedule).",
+                400,
+            )
+
+        sch = db.session.get(PaymentSchedule, schedule_id_filter)
+        if not sch:
+            return "Invalid schedule.", 400
+        tr = sch.tax_record
+        if not tr:
+            return "Invalid schedule.", 400
+        client_scope = tr.client
+        if not client_scope or client_scope.firm_id != current_user.firm_id:
+            return "Forbidden", 403
+        if not current_user.is_admin() and client_scope not in current_user.clients:
+            return "Forbidden", 403
 
         batch_filer_id = _digits_only(current_user.batch_filer_id)
         master_pin = _digits_only(current_user.master_inquiry_pin)
@@ -910,37 +938,19 @@ def create_app():
         current_user.last_filer_sequence_date = file_date
         current_user.last_filer_sequence_number = next_seq
 
-        q = (
-            ScheduledPayment.query
-            .options(
-                joinedload(ScheduledPayment.schedule)
-                .joinedload(PaymentSchedule.tax_record)
-                .joinedload(TaxRecord.client)
-            )
-            .join(PaymentSchedule, ScheduledPayment.schedule_id == PaymentSchedule.id)
-            .join(TaxRecord, PaymentSchedule.tax_record_id == TaxRecord.id)
-            .join(Client, TaxRecord.client_id == Client.id)
-            .filter(
-                Client.firm_id == current_user.firm_id,
-                ScheduledPayment.status == 'pending',
-            )
+        q = ScheduledPayment.query.filter(
+            ScheduledPayment.schedule_id == schedule_id_filter,
+            ScheduledPayment.status == "pending",
         )
         if not export_all_dates:
             q = q.filter(ScheduledPayment.input_date == file_date)
-        if client_id_filter is not None:
-            scope = db.session.get(Client, client_id_filter)
-            if not scope or scope.firm_id != current_user.firm_id:
-                return "Invalid client.", 400
-            if not current_user.is_admin() and scope not in current_user.clients:
-                return "Forbidden", 403
-            q = q.filter(TaxRecord.client_id == client_id_filter)
-        if schedule_id_filter is not None:
-            q = q.filter(ScheduledPayment.schedule_id == schedule_id_filter)
 
         payments = q.order_by(ScheduledPayment.id.asc()).all()
+        # Safety: ORM/joins elsewhere have duplicated rows; schedules are unique by id here.
+        payments = sorted({p.id: p for p in payments}.values(), key=lambda p: p.id)
 
         if not payments:
-            return "No pending payments found.", 400
+            return "No pending payments found for this schedule and file date.", 400
 
         lines = []
         payment_ref = 1
@@ -1316,12 +1326,15 @@ def create_app():
         tp = _require_4_digit_pin(request.form.get('taxpayer_pin'))
         if not tp:
             return render_template('partials/edit_client_form.html', client=client, error="Taxpayer PIN must be exactly 4 digits.")
+        ssn, ssn_err = _normalize_ssn_optional(request.form.get("tax_id"))
+        if ssn_err:
+            return render_template("partials/edit_client_form.html", client=client, error=ssn_err)
         # Update info
         client.name = request.form.get('name')
         client.email = request.form.get('email')
         client.phone = request.form.get('phone')
         client.address = request.form.get('address')
-        client.tax_id = request.form.get('tax_id')
+        client.tax_id = ssn
         client.taxpayer_pin = tp
         # Update Assignments
         selected_accountant_ids = request.form.getlist('accountant_ids')
@@ -1370,12 +1383,18 @@ def create_app():
             all_accountants = User.query.filter(User.role.has(Role.name == 'Accountant'), User.firm_id == current_user.firm_id).all()
             return render_template('partials/add_client_form.html', all_accountants=all_accountants, error="Taxpayer PIN must be exactly 4 digits.")
 
+        ssn, ssn_err = _normalize_ssn_optional(request.form.get("tax_id"))
+        if ssn_err:
+            from .models import Role
+            all_accountants = User.query.filter(User.role.has(Role.name == 'Accountant'), User.firm_id == current_user.firm_id).all()
+            return render_template("partials/add_client_form.html", all_accountants=all_accountants, error=ssn_err)
+
         new_client = Client(
             name=request.form.get('name'),
             email=request.form.get('email'),
             phone=request.form.get('phone'),
             address=request.form.get('address'),
-            tax_id=request.form.get('tax_id'),
+            tax_id=ssn,
             taxpayer_pin=tp,
             firm_id=current_user.firm_id
         )
