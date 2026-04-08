@@ -1,5 +1,24 @@
 # estimate-tax
 
+# First Time Setup
+### 1. Set up Virtual Environment and Install Requirements
+Ensure that you have python 3.x installed. Instructions to install the requirements in the virtual environment can be found [here](#install-requirements)
+### 2. Generate env file
+In the directory, run the following:
+```
+python generate_env.py
+```
+### 3. Generate sample data
+run the following:
+```
+python sample_data.py
+```
+### 4. Run the application
+run the following:
+```
+python run.py
+```
+The application will be accessible at http://127.0.0.1:5000. Sample login info is provided [here](#sample-login-info). The developer has the most permissions.
 
 
 # Quick Start

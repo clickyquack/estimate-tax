@@ -42,6 +42,8 @@ def generate_sample_data():
             firm_id=test_firm.id
         )
         developer.set_password('developer')
+        developer.batch_filer_id = "123456789"
+        developer.master_inquiry_pin = "1234"
         
         # SysAdmin User
         sysadmon = User(
@@ -51,6 +53,8 @@ def generate_sample_data():
             firm_id=test_firm.id
         )
         sysadmon.set_password('sysadmin')
+        sysadmon.batch_filer_id = "123456789"
+        sysadmon.master_inquiry_pin = "1234"
 
         # Admin User
         admin = User(
@@ -60,6 +64,8 @@ def generate_sample_data():
             firm_id=test_firm.id
         )
         admin.set_password('admin')
+        admin.batch_filer_id = "123456789"
+        admin.master_inquiry_pin = "1234"
         
         # Standard Accountant (Alex)
         Accountant1 = User(
@@ -69,6 +75,8 @@ def generate_sample_data():
             firm_id=test_firm.id
         )
         Accountant1.set_password('accountant')
+        Accountant1.batch_filer_id = "123456789"
+        Accountant1.master_inquiry_pin = "1234"
 
         Accountant2 = User(
             name="Test Accountant 2",
@@ -77,6 +85,8 @@ def generate_sample_data():
             firm_id=test_firm.id
         )
         Accountant2.set_password('accountant')
+        Accountant2.batch_filer_id = "123456789"
+        Accountant2.master_inquiry_pin = "1234"
 
         db.session.add_all([developer, sysadmon, admin, Accountant1, Accountant2])
         db.session.commit()
@@ -94,6 +104,7 @@ def generate_sample_data():
                 name=fake.company() if id_format == "##-#######" else fake.name(),
                 email=fake.company_email(),
                 tax_id=fake.numerify(text=id_format),
+                taxpayer_pin=fake.numerify(text="####"),
                 firm_id=test_firm.id,
                 address=fake.address(),
                 phone=fake.phone_number()

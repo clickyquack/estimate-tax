@@ -80,5 +80,37 @@
                 item.style.display = text.includes(filter) ? '' : 'none';
             });
         });
+
+        function initMainPanelSsnEditor() {
+            var root = document.getElementById('main-panel');
+            if (!root) return;
+            var btn = root.querySelector('#btnEditSsn');
+            var masked = root.querySelector('#tin_masked');
+            var full = root.querySelector('#tin');
+            if (!btn || !masked || !full) return;
+
+            btn.addEventListener('click', function () {
+                full.classList.toggle('d-none');
+                if (!full.classList.contains('d-none')) {
+                    // Prefill from existing masked value is not possible; user may type full 9 digits.
+                    full.focus();
+                }
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', initMainPanelSsnEditor);
+        document.body.addEventListener('htmx:afterSwap', function (ev) {
+            if (ev.target && ev.target.id === 'main-panel') initMainPanelSsnEditor();
+            if (ev.target && ev.target.id === 'export-schedule-feedback') {
+                var sid = ev.target.querySelector('#generated_schedule_id');
+                var out = document.getElementById('export_schedule_id');
+                var btn = document.getElementById('btnExportSchedule');
+                if (sid && out) out.value = sid.value || '';
+                if (btn) {
+                    btn.disabled = !(sid && sid.value);
+                    btn.title = btn.disabled ? 'Generate payments first' : 'Download export for this schedule';
+                }
+            }
+        });
     </script>
 {% endblock %}

@@ -36,6 +36,31 @@ body {
 .client-selector .input-group input {
     border-bottom: 1px solid var(--border-color);
 }
+.taxpayer-type-toggle {
+    display: inline-flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+.taxpayer-type-toggle .taxpayer-toggle-btn {
+    width: 3rem;
+    height: 3rem;
+    padding: 0;
+    border: 2px solid var(--border-color);
+    background: #fff;
+    font-weight: 700;
+    font-size: 1.1rem;
+    border-radius: 4px;
+    line-height: 1;
+}
+.taxpayer-type-toggle .taxpayer-toggle-btn:hover {
+    border-color: #adb5bd;
+}
+.taxpayer-type-toggle .taxpayer-toggle-btn.active {
+    border-color: #0d6efd;
+    background: #e7f1ff;
+    color: #0d6efd;
+}
+
 .client-list {
     max-height: 50vh;
     overflow-y: auto;

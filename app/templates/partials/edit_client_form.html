@@ -34,10 +34,16 @@
             </div>
 
             <div class="mb-3">
-                <label class="form-label small fw-bold text-muted">Tax ID (TIN / SSN)</label>
+                <label class="form-label small fw-bold text-muted">SSN</label>
                 <input type="text" name="tax_id" class="form-control font-monospace" value="{{ client.tax_id or '' }}"
-                    placeholder="00-0000000 or 000-00-0000" pattern="^([0-9]{2}-[0-9]{7}|[0-9]{3}-[0-9]{2}-[0-9]{4})?$"
-                    title="Must be empty, Business (00-0000000), or Individual (000-00-0000)">
+                    inputmode="numeric" autocomplete="off" placeholder="9 digits" maxlength="11"
+                    title="Optional. Enter 9 digits (with or without hyphens).">
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label small fw-bold text-muted">Taxpayer PIN</label>
+                <input type="text" name="taxpayer_pin" class="form-control font-monospace" value="{{ client.taxpayer_pin or '' }}"
+                    placeholder="4 digits" pattern="^\d{4}$" maxlength="4" required>
             </div>
 
             <div class="mb-4">
