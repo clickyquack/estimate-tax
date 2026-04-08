@@ -1,4 +1,16 @@
-from flask import Flask, app, make_response, render_template, request, redirect, url_for, flash, abort, Response
+from flask import (
+    Flask,
+    app,
+    current_app,
+    make_response,
+    render_template,
+    request,
+    redirect,
+    url_for,
+    flash,
+    abort,
+    Response,
+)
 from markupsafe import escape
 from datetime import datetime, date, timedelta, time
 
@@ -7,6 +19,7 @@ from config import Config
 
 from functools import wraps
 from flask_login import current_user, login_required, login_user, logout_user
+import os
 import re
 
 from flask_limiter import Limiter
@@ -59,6 +72,24 @@ def _require_4_digit_pin(pin_raw: str):
     return pin
 
 
+def _ensure_default_roles() -> None:
+    """Seed roles table on fresh databases (create_all does not insert rows). Registration requires Admin."""
+    from .models import Role
+
+    names = ("Developer", "SysAdmin", "Admin", "Accountant")
+    try:
+        existing = {r.name for r in Role.query.all()}
+        added = False
+        for name in names:
+            if name not in existing:
+                db.session.add(Role(name=name))
+                added = True
+        if added:
+            db.session.commit()
+    except Exception:
+        db.session.rollback()
+
+
 def _ensure_sqlite_schema_up_to_date(app: Flask) -> None:
     """
     Lightweight SQLite schema patcher for local/dev DBs.
@@ -94,8 +125,12 @@ def create_app():
 
     with app.app_context():
         from . import models
+        base = app.config.get("BASE_DIR") or os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+        instance_dir = os.path.join(base, "instance")
+        os.makedirs(instance_dir, exist_ok=True)
         db.create_all()
         _ensure_sqlite_schema_up_to_date(app)
+        _ensure_default_roles()
 
     # -----------------------------------
     # ----------- LOGIN MANAGER ---------
@@ -172,12 +207,21 @@ def create_app():
             
             # Create the firm and admin
             try:
+                admin_role = Role.query.filter_by(name="Admin").first()
+                if not admin_role:
+                    current_app.logger.error("register_firm: Admin role missing; run DB seed or restart app to create roles.")
+                    flash(
+                        "Registration is unavailable because the server database is not fully initialized. "
+                        "Ask the operator to restart the application or run role seeding.",
+                        "danger",
+                    )
+                    return render_template("register-firm.html", firms=all_firms)
+
                 new_firm = Firm(name=firm_name, email=firm_email, status="Active")
                 db.session.add(new_firm)
                 db.session.flush() # Gets the firm ID before committing
 
                 # Create the owner user
-                admin_role = Role.query.filter_by(name='Admin').first()
                 owner = User(name=owner_name, email=admin_email, firm_id=new_firm.id, role_id=admin_role.id)
                 owner.set_password(owner_password)
                 db.session.add(owner)
@@ -188,7 +232,8 @@ def create_app():
             
             except Exception as e:
                 db.session.rollback()
-                flash('An error occurred during registration. Please try again.', 'danger')
+                current_app.logger.exception("register_firm failed: %s", e)
+                flash("An error occurred during registration. Please try again.", "danger")
             
         return render_template('register-firm.html', firms=all_firms)
         
