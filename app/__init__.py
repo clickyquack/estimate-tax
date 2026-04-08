@@ -10,6 +10,7 @@ from flask import (
     flash,
     abort,
     Response,
+    jsonify,
 )
 from markupsafe import escape
 from datetime import datetime, date, timedelta, time
@@ -33,12 +34,19 @@ from .tax_helpers import (
     parse_flexible_date,
 )
 
+import stripe
+
 
 # Helper function to log user actions
 def log_action(action, entity_type=None, entity_id=None):
     from .models import AuditLog
+
+    uid = None
+    if current_user and current_user.is_authenticated:
+        uid = current_user.id
+
     new_log = AuditLog(
-        user_id=current_user.id,
+        user_id=uid,
         action=action,
         entity_type=entity_type,
         entity_id=entity_id,
@@ -74,6 +82,8 @@ def _require_4_digit_pin(pin_raw: str):
 
 def _normalize_ssn_optional(raw):
     """Return (9-digit SSN or None if empty, error message or None). Hyphens/formatting stripped."""
+    def _digits_only(value: str) -> str:
+        return re.sub(r"\D+", "", value or "")
     d = _digits_only(raw or "")
     if not d:
         return None, None
@@ -201,6 +211,8 @@ def create_app():
     @limiter.limit("10 per minute")
     def register_firm():
         from .models import Firm, User, Role
+        stripe.api_key = app.config['STRIPE_SECRET_KEY']
+
         all_firms = Firm.query.all()
         if request.method == 'POST':
             firm_name = request.form.get('firm_name')
@@ -212,8 +224,15 @@ def create_app():
             # Integrity Checks
             existing_user = User.query.filter_by(email=admin_email).first()
             if existing_user:
-                flash('That email is already registered to a user.', 'danger')
-                return render_template('register-firm.html')
+                existing_firm = Firm.query.get(existing_user.firm_id)
+
+                if existing_firm and existing_firm.status == "Pending":
+                    db.session.delete(existing_user)
+                    db.session.delete(existing_firm)
+                    db.session.commit()
+                else:
+                    flash('That email is already registered to a user.', 'danger')
+                    return render_template('register-firm.html')
             
             # Create the firm and admin
             try:
@@ -227,7 +246,7 @@ def create_app():
                     )
                     return render_template("register-firm.html", firms=all_firms)
 
-                new_firm = Firm(name=firm_name, email=firm_email, status="Active")
+                new_firm = Firm(name=firm_name, email=firm_email, status="Pending")
                 db.session.add(new_firm)
                 db.session.flush() # Gets the firm ID before committing
 
@@ -236,16 +255,104 @@ def create_app():
                 owner.set_password(owner_password)
                 db.session.add(owner)
                 db.session.commit()
-            
-                flash('Firm registered successfully', 'success')
-                return redirect(url_for('login'))
+
+                # Create Stripe Checkout Session for the subscription
+                checkout_session = stripe.checkout.Session.create(
+                    payment_method_types=['card'],
+                    line_items=[{
+                        'price': app.config['STRIPE_SEAT_PRICE_ID'],
+                        'quantity': 1, # 1 seat for the admin
+                    }],
+                    mode='subscription',
+                    client_reference_id=str(new_firm.id), 
+                    customer_email=firm_email,
+                    
+                    # Where to send them after they pay or cancel
+                    success_url=url_for('login', _external=True) + '?registered=success',
+                    cancel_url=url_for('register_firm', _external=True) + '?error=cancelled',
+                )
+                return redirect(checkout_session.url, code=303)
             
             except Exception as e:
                 db.session.rollback()
-                current_app.logger.exception("register_firm failed: %s", e)
-                flash("An error occurred during registration. Please try again.", "danger")
+                if app.config['TESTING']:
+                    print(f"Registration Error: {e}")
+                flash('An error occurred during registration. Please try again.', 'danger')
             
         return render_template('register-firm.html', firms=all_firms)
+    
+
+    @app.route('/webhook', methods=['POST'])
+    def stripe_webhook():
+        from .models import Firm
+        
+        payload = request.data
+        sig_header = request.headers.get('Stripe-Signature')
+        endpoint_secret = app.config.get('STRIPE_WEBHOOK_SECRET')
+
+        try:
+            # Verifies the webhook signature and constructs the event
+            event = stripe.Webhook.construct_event(payload, sig_header, endpoint_secret)
+        except ValueError as e:
+            return jsonify({'error': 'Invalid payload'}), 400
+        except stripe.error.SignatureVerificationError as e:
+            return jsonify({'error': 'Invalid signature'}), 400
+
+        # Handle successful checkout
+        if event['type'] == 'checkout.session.completed':
+            session = event['data']['object']
+            
+            firm_id = session.client_reference_id
+            customer_id = session.customer
+
+            if firm_id:
+                firm = Firm.query.get(firm_id)
+                if firm:
+                    firm.status = "Active"
+                    firm.stripe_customer_id = customer_id
+                    log_action('Firm Activated', entity_type='Firm', entity_id=firm.id)
+                    db.session.commit()
+                    if app.config['TESTING']:
+                        print(f"Webhook Success: Firm {firm.name} is now Active!")\
+                        
+        elif event['type'] == 'invoice.paid':
+            invoice = event['data']['object']
+            customer_id = invoice.customer
+
+            firm = Firm.query.filter_by(stripe_customer_id=customer_id).first()
+            if firm:
+                firm.status = "Active"
+                log_action('Payment Received - Marked Active', entity_type='Firm', entity_id=firm.id)
+                db.session.commit()
+                if app.config['TESTING']:
+                    print(f"Webhook Alert: Payment received for Firm {firm.name}, marked as Active.")
+
+        elif event['type'] == 'invoice.payment_failed':
+            invoice = event['data']['object']
+            customer_id = invoice.customer
+
+            firm = Firm.query.filter_by(stripe_customer_id=customer_id).first()
+            if firm:
+                firm.status = "Unpaid"
+                log_action('Payment Failed - Marked Unpaid', entity_type='Firm', entity_id=firm.id)
+                db.session.commit()
+                if app.config['TESTING']:
+                    print(f"Webhook Alert: Payment failed for Firm {firm.name}, marked as Unpaid.")
+
+        elif event['type'] == 'customer.subscription.deleted':
+            subscription = event['data']['object']
+            customer_id = subscription.customer
+
+            firm = Firm.query.filter_by(stripe_customer_id=customer_id).first()
+            if firm:
+                firm.status = "Cancelled"
+                log_action('Subscription Cancelled', entity_type='Firm', entity_id=firm.id)
+                db.session.commit()
+                if app.config['TESTING']:
+                    print(f"Webhook Alert: Subscription cancelled for Firm {firm.name}, marked as Cancelled.")
+
+        # Return a 200 response to acknowledge receipt of the event
+        return jsonify({'status': 'success'}), 200
         
     
     @app.route('/log_user_in', methods=['POST'])
@@ -260,8 +367,17 @@ def create_app():
         user = User.query.filter_by(email=email).first()
         #Check if user exists and password is correct
         if user and user.check_password(password):
-            login_user(user, remember=remember)
-            return redirect(url_for('dashboard'))
+            if user.firm.status == "Active":
+                login_user(user, remember=remember)
+                return redirect(url_for('dashboard'))
+            else:
+                if user.is_admin():
+                    # Allow admins in with limited access
+                    login_user(user, remember=remember)
+                    return redirect(url_for('admin'))
+                else:
+                    flash('Your firm is currently not active. Please contact your administrator.', 'danger')
+                    return redirect(url_for('login'))
         else:
             flash('Invalid email or password', 'danger')
             return redirect(url_for('login'))
@@ -277,6 +393,10 @@ def create_app():
     @login_required
     def dashboard(client_id=None):
         from .models import Client
+
+        # Block being able to use dashboard if firm is not active
+        if current_user.firm.status != "Active":
+            return redirect(url_for('admin'))
 
         if current_user.is_admin():
             # Admins can see all clients in their firm
@@ -1286,15 +1406,75 @@ def create_app():
     @app.route('/admin')
     @admin_required
     def admin():
-        from .models import Client, User, Role
+        from .models import Client, User, Role, Firm
 
+        # Get all clients and accountants in the firm
         clients = Client.query.filter_by(firm_id=current_user.firm_id).all()
         accountants = User.query.filter(
             User.role.has(Role.name == 'Accountant'), 
             User.firm_id == current_user.firm_id
         ).all()
-        return render_template('admin.html', clients=clients, accountants=accountants)
+
+        # Get subscription info from Stripe
+        firm = Firm.query.get(current_user.firm_id)
+        next_payment_date = "N/A"
+        payment_amount = "0.00"
+        stripe.api_key = app.config['STRIPE_SECRET_KEY']
+
+        if firm.stripe_customer_id:
+            try:
+                subs = stripe.Subscription.list(customer=firm.stripe_customer_id, status='active', limit=1)
+                
+                if subs.data:
+                    active_sub_id = subs.data[0].id
+                    
+                    upcoming_invoice = stripe.Invoice.create_preview(
+                        customer=firm.stripe_customer_id,
+                        subscription=active_sub_id
+                    )
+                    
+                    raw_amount = getattr(upcoming_invoice, 'amount_due', 0)
+                    payment_amount = f"{raw_amount / 100:.2f}"
+                    
+                    end_timestamp = getattr(upcoming_invoice, 'period_end', None)
+                    if not end_timestamp and hasattr(upcoming_invoice, 'get'):
+                        end_timestamp = upcoming_invoice.get('period_end')
+                        
+                    if end_timestamp:
+                        next_payment_date = datetime.fromtimestamp(end_timestamp).strftime('%B %d, %Y')
+                    
+            except Exception as e:
+                if app.config['TESTING']:
+                    print(f"Stripe Error: {e}")
+
+        return render_template('admin.html', 
+                            clients=clients, 
+                            accountants=accountants,
+                            next_payment_date=next_payment_date,
+                            payment_amount=payment_amount)
     
+    
+    @app.route('/billing-portal', methods=['POST'])
+    def billing_portal():
+        from .models import Firm
+        firm = Firm.query.get(current_user.firm_id)
+        stripe.api_key = app.config['STRIPE_SECRET_KEY']
+        
+        if not firm.stripe_customer_id:
+            # flash("No active billing account found.", "danger")
+            return redirect(url_for('admin'))
+            
+        try:
+            portal_session = stripe.billing_portal.Session.create(
+                customer=firm.stripe_customer_id,
+                return_url=url_for('admin', _external=True)
+            )
+            return redirect(portal_session.url, code=303)
+        except Exception as e:
+            print(f"Portal Error: {e}")
+            # flash("Could not connect to billing portal.", "danger")
+            return redirect(url_for('admin'))
+
     # --- ADMIN: Client Management ---
     @app.route('/admin/client/<int:client_id>/edit', methods=['GET'])
     @admin_required
@@ -1368,7 +1548,6 @@ def create_app():
     @admin_required
     def add_client_form():
         from .models import User, Role
-
         all_accountants = User.query.filter(User.role.has(Role.name == 'Accountant'), User.firm_id == current_user.firm_id).all()
         return render_template('partials/add_client_form.html', all_accountants=all_accountants)
 
@@ -1452,7 +1631,7 @@ def create_app():
     @app.route('/admin/accountant/<int:user_id>', methods=['DELETE'])
     @admin_required
     def delete_accountant(user_id):
-        from .models import User
+        from .models import User, Firm
         from flask import make_response
         
         accountant = User.query.get_or_404(user_id)
@@ -1461,6 +1640,29 @@ def create_app():
         log_action('Deleted Accountant: ' + accountant.name, entity_type='User', entity_id=accountant.id)
         db.session.delete(accountant)
         db.session.commit()
+
+        # Stripe logic for updating subscription
+        stripe.api_key = app.config['STRIPE_SECRET_KEY']
+        firm = Firm.query.get(current_user.firm_id)
+        total_seats = User.query.filter_by(firm_id=firm.id).count()
+        if firm.stripe_customer_id:
+            try:
+                subs = stripe.Subscription.list(customer=firm.stripe_customer_id, status='active', limit=1)
+                
+                if subs.data:
+                    sub = subs.data[0]
+                    sub_item_id = sub.items.data[0].id
+                    
+                    stripe.Subscription.modify(
+                        sub.id,
+                        items=[{"id": sub_item_id, "quantity": total_seats}]
+                    )
+                    print(f"Stripe Success: Firm seats updated to {total_seats}!")
+                    
+            except Exception as e:
+                if app.config['TESTING']:
+                    print(f"Stripe Seat Update Error: {e}")
+
         response = make_response("", 200)
         response.headers['HX-Refresh'] = 'true'
         return response
@@ -1468,12 +1670,29 @@ def create_app():
     @app.route('/admin/accountant/add', methods=['GET'])
     @admin_required
     def add_accountant_form():
-        return render_template('partials/add_accountant_form.html')
+        from .models import Firm
+
+        stripe.api_key = app.config['STRIPE_SECRET_KEY']
+        firm = Firm.query.get(current_user.firm_id)
+        seat_price = "0.00"
+        if firm.stripe_customer_id:
+            try:
+                subs = stripe.Subscription.list(customer=firm.stripe_customer_id, status='active', limit=1)
+                if subs.data:
+                    first_item = subs.data[0].items.data[0]
+                    raw_amount = getattr(first_item.price, 'unit_amount', 0)
+                    if raw_amount:
+                        seat_price = f"{raw_amount / 100:.2f}"
+            except Exception as e:
+                if app.config['TESTING']:
+                    print(f"Form Price Fetch Error: {e}")
+
+        return render_template('partials/add_accountant_form.html', seat_price=seat_price)
     
     @app.route('/admin/accountant/create', methods=['POST'])
     @admin_required
     def create_accountant():
-        from .models import User, Role
+        from .models import User, Role, Firm
         from flask import make_response, render_template, request
 
         # Integrity Check
@@ -1499,6 +1718,30 @@ def create_app():
         try:
             db.session.add(new_acc)
             db.session.flush()
+
+            # Stripe logic for updating subscription
+            stripe.api_key = app.config['STRIPE_SECRET_KEY']
+            firm = Firm.query.get(current_user.firm_id)
+            total_seats = User.query.filter_by(firm_id=firm.id).count()
+            if firm.stripe_customer_id:
+                try:
+                    subs = stripe.Subscription.list(customer=firm.stripe_customer_id, status='active', limit=1)
+                    
+                    if subs.data:
+                        sub = subs.data[0]
+                        sub_item_id = sub.items.data[0].id
+                        
+                        stripe.Subscription.modify(
+                            sub.id,
+                            items=[{"id": sub_item_id, "quantity": total_seats}]
+                        )
+                        print(f"Stripe Success: Firm seats updated to {total_seats}!")
+                        
+                except Exception as e:
+                    if app.config['TESTING']:
+                        print(f"Stripe Seat Update Error: {e}")
+
+
             log_action('Created Accountant: ' + new_acc.name, entity_type='User', entity_id=new_acc.id)
             db.session.commit()
         except Exception as e:

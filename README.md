@@ -22,7 +22,8 @@ The application will be accessible at http://127.0.0.1:5000. Sample login info i
 
 
 # Quick Start
-[Install Requirements](#install-requirements)
+[Install Requirements](#install-requirements) <br>
+[Run on Server](#run-on-server)
 
 **Windows**
 ```
@@ -115,6 +116,27 @@ source venv/bin/activate
 
 # Save software requirements
 pip freeze > requirements.txt
+```
+
+
+# Run on Server
+### ssh and start virtual environment
+```
+ssh root@104.236.55.193
+cd ~/estimate-tax
+source venv/bin/activate
+```
+from here, you can make any changes desired, including git commands. To check out a different branch, do the following:
+```
+git fetch origin
+git checkout Example-Branch
+git pull origin Example-Branch
+```
+after making changes, you should restart the process
+### Restart process 
+```
+pkill -f waitress
+waitress-serve --call app:create_app &
 ```
 
 

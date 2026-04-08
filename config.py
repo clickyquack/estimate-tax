@@ -13,6 +13,10 @@ class Config:
 
     SECRET_KEY = os.environ.get('SECRET_KEY')
     ENCRYPTION_KEY = os.environ.get('ENCRYPTION_KEY')
+
+    STRIPE_SECRET_KEY = os.environ.get('STRIPE_SECRET_KEY')
+    STRIPE_SEAT_PRICE_ID = os.environ.get('STRIPE_SEAT_PRICE_ID')
+    STRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET')
     
     SESSION_PERMANENT = False
     REMEMBER_COOKIE_DURATION = timedelta(seconds=0)

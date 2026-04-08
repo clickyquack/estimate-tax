@@ -27,7 +27,8 @@ def generate_sample_data():
         # Generate Test Firm
         test_firm = Firm(
             name="Test Firm", 
-            email="test@test.com"
+            email="test@test.com",
+            status="Active"
         )
         db.session.add(test_firm)
         db.session.commit()
