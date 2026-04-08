@@ -10,6 +10,7 @@ from flask import (
     flash,
     abort,
     Response,
+    jsonify,
 )
 from markupsafe import escape
 from datetime import datetime, date, timedelta, time
@@ -81,6 +82,8 @@ def _require_4_digit_pin(pin_raw: str):
 
 def _normalize_ssn_optional(raw):
     """Return (9-digit SSN or None if empty, error message or None). Hyphens/formatting stripped."""
+    def _digits_only(value: str) -> str:
+        return re.sub(r"\D+", "", value or "")
     d = _digits_only(raw or "")
     if not d:
         return None, None
@@ -295,7 +298,7 @@ def create_app():
         except stripe.error.SignatureVerificationError as e:
             return jsonify({'error': 'Invalid signature'}), 400
 
-        # Handle the successful payment
+        # Handle successful checkout
         if event['type'] == 'checkout.session.completed':
             session = event['data']['object']
             
@@ -310,7 +313,43 @@ def create_app():
                     log_action('Firm Activated', entity_type='Firm', entity_id=firm.id)
                     db.session.commit()
                     if app.config['TESTING']:
-                        print(f"Webhook Success: Firm {firm.name} is now Active!")
+                        print(f"Webhook Success: Firm {firm.name} is now Active!")\
+                        
+        elif event['type'] == 'invoice.paid':
+            invoice = event['data']['object']
+            customer_id = invoice.customer
+
+            firm = Firm.query.filter_by(stripe_customer_id=customer_id).first()
+            if firm:
+                firm.status = "Active"
+                log_action('Payment Received - Marked Active', entity_type='Firm', entity_id=firm.id)
+                db.session.commit()
+                if app.config['TESTING']:
+                    print(f"Webhook Alert: Payment received for Firm {firm.name}, marked as Active.")
+
+        elif event['type'] == 'invoice.payment_failed':
+            invoice = event['data']['object']
+            customer_id = invoice.customer
+
+            firm = Firm.query.filter_by(stripe_customer_id=customer_id).first()
+            if firm:
+                firm.status = "Unpaid"
+                log_action('Payment Failed - Marked Unpaid', entity_type='Firm', entity_id=firm.id)
+                db.session.commit()
+                if app.config['TESTING']:
+                    print(f"Webhook Alert: Payment failed for Firm {firm.name}, marked as Unpaid.")
+
+        elif event['type'] == 'customer.subscription.deleted':
+            subscription = event['data']['object']
+            customer_id = subscription.customer
+
+            firm = Firm.query.filter_by(stripe_customer_id=customer_id).first()
+            if firm:
+                firm.status = "Cancelled"
+                log_action('Subscription Cancelled', entity_type='Firm', entity_id=firm.id)
+                db.session.commit()
+                if app.config['TESTING']:
+                    print(f"Webhook Alert: Subscription cancelled for Firm {firm.name}, marked as Cancelled.")
 
         # Return a 200 response to acknowledge receipt of the event
         return jsonify({'status': 'success'}), 200
@@ -328,8 +367,17 @@ def create_app():
         user = User.query.filter_by(email=email).first()
         #Check if user exists and password is correct
         if user and user.check_password(password):
-            login_user(user, remember=remember)
-            return redirect(url_for('dashboard'))
+            if user.firm.status == "Active":
+                login_user(user, remember=remember)
+                return redirect(url_for('dashboard'))
+            else:
+                if user.is_admin():
+                    # Allow admins in with limited access
+                    login_user(user, remember=remember)
+                    return redirect(url_for('admin'))
+                else:
+                    flash('Your firm is currently not active. Please contact your administrator.', 'danger')
+                    return redirect(url_for('login'))
         else:
             flash('Invalid email or password', 'danger')
             return redirect(url_for('login'))
@@ -345,6 +393,10 @@ def create_app():
     @login_required
     def dashboard(client_id=None):
         from .models import Client
+
+        # Block being able to use dashboard if firm is not active
+        if current_user.firm.status != "Active":
+            return redirect(url_for('admin'))
 
         if current_user.is_admin():
             # Admins can see all clients in their firm
@@ -1409,7 +1461,7 @@ def create_app():
         stripe.api_key = app.config['STRIPE_SECRET_KEY']
         
         if not firm.stripe_customer_id:
-            flash("No active billing account found.", "danger")
+            # flash("No active billing account found.", "danger")
             return redirect(url_for('admin'))
             
         try:
@@ -1420,7 +1472,7 @@ def create_app():
             return redirect(portal_session.url, code=303)
         except Exception as e:
             print(f"Portal Error: {e}")
-            flash("Could not connect to billing portal.", "danger")
+            # flash("Could not connect to billing portal.", "danger")
             return redirect(url_for('admin'))
 
     # --- ADMIN: Client Management ---
