@@ -81,41 +81,31 @@
             });
         });
 
-        function initMainPanelTaxpayer() {
+        function initMainPanelSsnEditor() {
             var root = document.getElementById('main-panel');
             if (!root) return;
-            var hidden = root.querySelector('#taxpayer_type_code');
-            var btnI = root.querySelector('#btnTaxpayerI');
-            var btnB = root.querySelector('#btnTaxpayerB');
-            if (!hidden || !btnI || !btnB) return;
+            var btn = root.querySelector('#btnEditSsn');
+            var masked = root.querySelector('#tin_masked');
+            var full = root.querySelector('#tin');
+            if (!btn || !masked || !full) return;
 
-            function syncTaxpayer() {
-                var v = hidden.value;
-                root.querySelectorAll('.taxpayer-toggle-btn').forEach(function (b) {
-                    b.classList.toggle('active', b.getAttribute('data-type') === v);
-                });
-            }
-
-            function setType(t) {
-                hidden.value = t;
-                syncTaxpayer();
-            }
-
-            btnI.addEventListener('click', function () {
-                if (hidden.value === 'I') {
-                    syncTaxpayer();
-                    return;
+            btn.addEventListener('click', function () {
+                full.classList.toggle('d-none');
+                if (!full.classList.contains('d-none')) {
+                    // Prefill from existing masked value is not possible; user may type full 9 digits.
+                    full.focus();
                 }
-                setType('I');
             });
-            btnB.addEventListener('click', function () { setType('B'); });
-
-            syncTaxpayer();
         }
 
-        document.addEventListener('DOMContentLoaded', initMainPanelTaxpayer);
+        document.addEventListener('DOMContentLoaded', initMainPanelSsnEditor);
         document.body.addEventListener('htmx:afterSwap', function (ev) {
-            if (ev.target && ev.target.id === 'main-panel') initMainPanelTaxpayer();
+            if (ev.target && ev.target.id === 'main-panel') initMainPanelSsnEditor();
+            if (ev.target && ev.target.id === 'export-schedule-feedback') {
+                var sid = ev.target.querySelector('#generated_schedule_id');
+                var out = document.getElementById('export_schedule_id');
+                if (sid && out) out.value = sid.value || '';
+            }
         });
     </script>
 {% endblock %}

@@ -39,12 +39,16 @@
                         <input type="text" id="selectedClientName" class="form-control" value="{{ client.name }}" readonly>
                     </div>
 
-                    <p class="text-muted small text-center mb-3">Only fields used for fixed-width export are shown. Input date for exports matches settlement date.</p>
+                    <p class="text-muted small text-center mb-3">Only fields used for fixed-width export are shown.</p>
                     <div class="row g-3">
                         <div class="col-md-4">
-                            <label for="tin" class="form-label">TIN (SSN/EIN)</label>
-                            <input type="text" id="tin" name="tin" class="form-control" value="{{ client.tax_id or '' }}"
-                                pattern="^([0-9]{2}-[0-9]{7}|[0-9]{3}-[0-9]{2}-[0-9]{4})?$" placeholder="00-0000000 or 000-00-0000">
+                            <label class="form-label">SSN</label>
+                            <div class="input-group">
+                                <input type="text" id="tin_masked" class="form-control font-monospace" value="***-**-{{ ssn_last2 or '' }}" readonly>
+                                <button class="btn btn-outline-secondary" type="button" id="btnEditSsn">Show / Edit</button>
+                            </div>
+                            <input type="text" id="tin" name="tin" class="form-control font-monospace mt-2 d-none"
+                                value="" pattern="^\d{9}$" maxlength="9" placeholder="9 digits (no hyphens)">
                             </div>
                         <div class="col-md-4">
                             <label for="taxpayer_pin" class="form-label">Taxpayer PIN</label>
@@ -52,34 +56,16 @@
                                 value="{{ client.taxpayer_pin or '' }}" placeholder="4 digits" pattern="^\d{4}$" maxlength="4" required>
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label d-block">Taxpayer Type</label>
-                            <input type="hidden" name="taxpayer_type_code" id="taxpayer_type_code"
-                                value="{% if latest_record %}{{ latest_record.taxpayer_type }}{% else %}{{ default_taxpayer_type or 'I' }}{% endif %}">
-                            <div class="taxpayer-type-toggle" role="group" aria-label="Taxpayer type">
-                                <button type="button" class="taxpayer-toggle-btn {% if latest_record %}{% if latest_record.taxpayer_type == 'I' %}active{% endif %}{% else %}{% if (default_taxpayer_type or 'I') == 'I' %}active{% endif %}{% endif %}"
-                                    data-type="I" id="btnTaxpayerI" title="Individual">I</button>
-                                <button type="button" class="taxpayer-toggle-btn {% if latest_record %}{% if latest_record.taxpayer_type == 'B' %}active{% endif %}{% else %}{% if (default_taxpayer_type or 'I') == 'B' %}active{% endif %}{% endif %}"
-                                    data-type="B" id="btnTaxpayerB" title="Business">B</button>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <label for="tax_period" class="form-label">Tax Period</label>
+                            <label for="tax_period" class="form-label">Tax Year</label>
                             <input type="text" id="tax_period" name="tax_period" class="form-control font-monospace" required
-                                pattern="^(\d{4}|\d{6})$" maxlength="6" placeholder="YYYY or YYYYMM"
-                                title="Calendar year (YYYY) or month (YYYYMM). Annual exports as YYYY00."
-                                value="{{ latest_payment.tax_period if latest_payment and latest_payment.tax_period else '' }}">
+                                pattern="^\d{4}$" maxlength="4" placeholder="YYYY"
+                                value="{{ latest_record.tax_year if latest_record and latest_record.tax_year else default_input_date[:4] }}">
                         </div>
-
                         <div class="col-md-4">
-                            <label for="total_payment_amount" class="form-label">Total Payment Amount</label>
-                            <input type="number" id="total_payment_amount" name="total_payment_amount"
+                            <label for="total_annual_amount" class="form-label">Annual Total ($)</label>
+                            <input type="number" id="total_annual_amount" name="total_annual_amount"
                                 class="form-control" required step="1" min="1" placeholder="Whole dollars"
-                                value="{{ latest_payment.amount if latest_payment and latest_payment.amount else '' }}">
-                        </div>
-                        <div class="col-md-4">
-                            <label for="settlement_date" class="form-label">Settlement Date</label>
-                            <input type="date" id="settlement_date" name="settlement_date" class="form-control" required
-                                value="{{ latest_payment.due_date.strftime('%Y-%m-%d') if latest_payment and latest_payment.due_date else '' }}">
+                                value="{{ latest_record.estimated_tax_total if latest_record and latest_record.estimated_tax_total else '' }}">
                         </div>
                     </div>
 
@@ -109,7 +95,8 @@
                             <option value="weekly">Weekly</option>
                         </select>
                     </div>
-                    <form id="export-download" method="post" action="{{ url_for('export_auto') }}" class="d-flex flex-wrap align-items-end gap-3" target="_blank">
+                    <form id="generate-payments" method="post" action="{{ url_for('generate_export_schedule') }}" class="d-flex flex-wrap align-items-end gap-3"
+                        hx-post="{{ url_for('generate_export_schedule') }}" hx-target="#export-schedule-feedback" hx-swap="innerHTML">
                         <input type="hidden" name="client_id" value="{{ client.id }}">
                         <input type="hidden" name="period" id="export_period_sync" value="">
                         <div>
@@ -117,13 +104,16 @@
                             <input type="date" id="first_payment_date" name="first_payment_date" class="form-control"
                                 value="">
                         </div>
+                        <button type="submit" class="btn btn-outline-primary px-4">Generate payments</button>
+                    </form>
+                    <form id="export-download" method="get" action="{{ url_for('export_fixed_width') }}" class="d-flex flex-wrap align-items-end gap-3" target="_blank">
+                        <input type="hidden" name="schedule_id" id="export_schedule_id" value="">
+                        <input type="hidden" name="file_date" value="{{ default_input_date }}">
                         <button type="submit" class="btn btn-primary px-4">Export</button>
                     </form>
                 </div>
 
-                <div class="text-muted small text-center">
-                    Export will automatically generate the schedule for the selected split period using the client’s saved tax data.
-                </div>
+                <div id="export-schedule-feedback" class="mt-3"></div>
             </div>
         </div>
     </div>

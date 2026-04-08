@@ -242,12 +242,18 @@ def create_app():
 
         now = datetime.now()
         iso_date_string = now.strftime('%Y-%m-%d')
+        ssn_last2 = ""
+        if selected_client and getattr(selected_client, "tax_id", None):
+            d = re.sub(r"\D+", "", selected_client.tax_id or "")
+            if re.fullmatch(r"\d{9}", d):
+                ssn_last2 = d[-2:]
         return render_template(
             'dashboard.html',
             clients=clients,
             client=selected_client,
             selected_client=selected_client,
             default_taxpayer_type=infer_taxpayer_type_from_tin(getattr(selected_client, "tax_id", None)) if selected_client else "I",
+            ssn_last2=ssn_last2,
             default_input_date=iso_date_string,
             default_input_time=now.strftime('%H:%M')
         )
@@ -469,34 +475,20 @@ def create_app():
         from .models import Client, TaxRecord, ScheduledPayment, PaymentSchedule
         from decimal import Decimal, ROUND_HALF_UP
 
-        client_id = (request.form.get('client_id') or '').strip()
-        period = (request.form.get('period') or '').strip().lower()
-        year_raw = (request.form.get('calendar_year') or '').strip()
-        total_raw = (request.form.get('total_annual_amount') or '').strip()
-        tax_type_code_in = re.sub(r"\D+", "", (request.form.get('schedule_tax_type_code') or '').strip())
-        tax_form_in = (request.form.get('schedule_tax_form') or '').strip() or "1040"
-        taxpayer_type_in = (request.form.get('schedule_taxpayer_type') or "").strip().upper() or "I"
+        client_id = (request.form.get("client_id") or "").strip()
+        period = (request.form.get("period") or "").strip().lower()
+        first_payment_date_raw = (request.form.get("first_payment_date") or "").strip()
+        first_payment_date = None
+        if first_payment_date_raw:
+            try:
+                first_payment_date = datetime.strptime(first_payment_date_raw, "%Y-%m-%d").date()
+            except ValueError:
+                return '<div class="alert alert-danger py-2 small">First payment date must be YYYY-MM-DD.</div>', 200
 
         if not client_id.isdigit():
             return '<div class="alert alert-danger py-2 small">Invalid client.</div>', 200
-        try:
-            calendar_year = int(year_raw)
-        except ValueError:
-            return '<div class="alert alert-danger py-2 small">Calendar year must be a number.</div>', 200
-
-        try:
-            total_annual = Decimal(total_raw)
-        except Exception:
-            return '<div class="alert alert-danger py-2 small">Total amount must be a valid number.</div>', 200
-
-        total_annual = total_annual.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-        if total_annual <= 0:
-            return '<div class="alert alert-danger py-2 small">Total amount must be greater than 0.</div>', 200
-        if total_annual != total_annual.quantize(Decimal("1"), rounding=ROUND_HALF_UP):
-            return '<div class="alert alert-danger py-2 small">Total amount must be whole dollars (no decimals).</div>', 200
-
         if period in {"", "none"}:
-            return '<div class="alert alert-danger py-2 small">Choose a split period above to generate a schedule.</div>', 200
+            return '<div class="alert alert-danger py-2 small">Choose a split period above to generate payments.</div>', 200
         if period not in {"quarterly", "monthly", "biweekly", "weekly"}:
             return '<div class="alert alert-danger py-2 small">Choose a valid period.</div>', 200
 
@@ -506,104 +498,76 @@ def create_app():
 
         tin = _digits_only(client.tax_id)
         if not re.fullmatch(r"\d{9}", tin):
-            return '<div class="alert alert-danger py-2 small">Client TIN must be 9 digits before scheduling.</div>', 200
+            return '<div class="alert alert-danger py-2 small">Client SSN must be 9 digits before generating payments.</div>', 200
         tp = _digits_only(client.taxpayer_pin)
         if not re.fullmatch(r"\d{4}", tp):
-            return '<div class="alert alert-danger py-2 small">Client Taxpayer PIN must be 4 digits before scheduling.</div>', 200
+            return '<div class="alert alert-danger py-2 small">Client Taxpayer PIN must be 4 digits before generating payments.</div>', 200
+
+        latest_record = (
+            TaxRecord.query
+            .filter_by(client_id=client.id)
+            .order_by(TaxRecord.id.desc())
+            .first()
+        )
+        if not latest_record:
+            return '<div class="alert alert-danger py-2 small">Save client tax data first (tax year + annual total) before generating payments.</div>', 200
+
+        calendar_year = int(latest_record.tax_year or date.today().year)
+        try:
+            total_annual = Decimal(str(latest_record.estimated_tax_total)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        except Exception:
+            return '<div class="alert alert-danger py-2 small">Saved annual total is not a valid number.</div>', 200
+        if total_annual <= 0:
+            return '<div class="alert alert-danger py-2 small">Saved annual total must be greater than 0.</div>', 200
+        if total_annual != total_annual.quantize(Decimal("1"), rounding=ROUND_HALF_UP):
+            return '<div class="alert alert-danger py-2 small">Saved annual total must be whole dollars (no decimals).</div>', 200
 
         year_start = date(calendar_year, 1, 1)
         year_end = date(calendar_year, 12, 31)
-        start = year_start
-
-        pay_dates = _payment_dates_for_period(calendar_year, period, start, year_end)
+        pay_dates = _payment_dates_for_period(calendar_year, period, year_start, year_end, first_payment_date=first_payment_date)
         if not pay_dates:
             return '<div class="alert alert-danger py-2 small">No payment dates could be generated for that period.</div>', 200
         if len(pay_dates) > 400:
             return '<div class="alert alert-danger py-2 small">Too many payments; narrow the period or year.</div>', 200
 
-        latest_payment = (
-            ScheduledPayment.query
-            .join(PaymentSchedule, ScheduledPayment.schedule_id == PaymentSchedule.id)
-            .join(TaxRecord, PaymentSchedule.tax_record_id == TaxRecord.id)
-            .filter(TaxRecord.client_id == client.id)
-            .order_by(
-                ScheduledPayment.input_date.desc(),
-                ScheduledPayment.input_time.desc(),
-                ScheduledPayment.id.desc(),
-            )
-            .first()
-        )
-        latest_record = None
-        if latest_payment and latest_payment.schedule and latest_payment.schedule.tax_record:
-            latest_record = latest_payment.schedule.tax_record
-
-        tax_type_code = tax_type_code_in
-        if not re.fullmatch(r"\d{5}", tax_type_code) and latest_record and latest_record.tax_type_code:
-            tax_type_code = re.sub(r"\D+", "", latest_record.tax_type_code)
-        if not tax_type_code or not re.fullmatch(r"\d{5}", tax_type_code):
-            return '<div class="alert alert-danger py-2 small">Tax Type Code must be 5 digits.</div>', 200
-
-        tax_form = tax_form_in
-        taxpayer_type = taxpayer_type_in if taxpayer_type_in in {"B", "I"} else "I"
-
         total_dollars = int(total_annual.to_integral_value(rounding=ROUND_HALF_UP))
         if total_dollars < len(pay_dates):
-            return (
-                '<div class="alert alert-danger py-2 small">Total is too small for this many payments '
-                '(each installment must be at least $1).</div>',
-                200,
-            )
+            return '<div class="alert alert-danger py-2 small">Saved annual total is too small for this many payments (each installment must be at least $1).</div>', 200
+
         try:
-            dollar_parts = _split_total_dollars_by_quarter_targets(calendar_year, start, pay_dates, total_dollars)
+            if period == "quarterly":
+                dollar_parts = _split_total_dollars_by_quarter_targets(calendar_year, year_start, pay_dates, total_dollars)
+            else:
+                base = total_dollars // len(pay_dates)
+                rem = total_dollars % len(pay_dates)
+                dollar_parts = [base + (1 if i < rem else 0) for i in range(len(pay_dates))]
         except Exception:
             return '<div class="alert alert-danger py-2 small">Could not split payment amounts.</div>', 200
-        if sum(dollar_parts) != total_dollars or min(dollar_parts) < 1:
-            return '<div class="alert alert-danger py-2 small">Invalid payment split.</div>', 200
 
         try:
-            sched_tax_type = None
-            if latest_record:
-                sched_tax_type = latest_record.tax_type
-            if taxpayer_type == "I" and not sched_tax_type:
-                sched_tax_type = "ES"
-
-            new_record = TaxRecord(
-                client_id=client.id,
-                tax_year=calendar_year,
-                estimated_tax_total=float(total_annual),
-                uploaded_by=current_user.id,
-                tax_form=tax_form,
-                tax_type_code=tax_type_code,
-                tax_type=sched_tax_type,
-                taxpayer_type=taxpayer_type,
-                description=None,
-            )
-            db.session.add(new_record)
-            db.session.flush()
-
             schedule = PaymentSchedule(
-                tax_record_id=new_record.id,
+                tax_record_id=latest_record.id,
                 schedule_name=f"{calendar_year} {period} export schedule",
             )
             db.session.add(schedule)
             db.session.flush()
 
             noon = time(12, 0)
+            rows = []
             for d, dollars in zip(pay_dates, dollar_parts):
-                amt = Decimal(int(dollars)).quantize(Decimal("0.00"), rounding=ROUND_HALF_UP)
-                tax_period = f"{d.year}{str(d.month).zfill(2)}"
                 sp = ScheduledPayment(
                     schedule_id=schedule.id,
                     due_date=d,
-                    amount=float(amt),
+                    amount=float(Decimal(int(dollars)).quantize(Decimal("0.00"))),
                     status="pending",
                     eft_number="000000000000000",
-                    tax_period=tax_period,
+                    tax_period=f"{calendar_year}00",
                     input_method="B",
-                    input_date=d,
+                    input_date=date.today(),
                     input_time=noon,
                 )
                 db.session.add(sp)
+                rows.append((d, int(dollars)))
 
             db.session.flush()
             log_action(
@@ -614,12 +578,120 @@ def create_app():
             db.session.commit()
         except Exception:
             db.session.rollback()
-            return '<div class="alert alert-danger py-2 small">Could not save schedule. Check inputs and try again.</div>', 200
+            return '<div class="alert alert-danger py-2 small">Could not save payments. Try again.</div>', 200
 
-        return (
-            f'<div class="alert alert-success py-2 small">Created {len(pay_dates)} payments for {client.name}. '
-            f'Download exports using <strong>File Date</strong> equal to each payment’s date.</div>',
-            200,
+        payments = (
+            ScheduledPayment.query.filter_by(schedule_id=schedule.id)
+            .order_by(ScheduledPayment.due_date.asc(), ScheduledPayment.id.asc())
+            .all()
+        )
+        return render_template(
+            "partials/export_schedule_payments.html",
+            schedule=schedule,
+            payments=payments,
+            save_message=f"Generated {len(payments)} payment(s). Review or edit below, then save if you change anything.",
+        )
+
+    @app.route("/export/schedule/<int:schedule_id>/payments", methods=["POST"])
+    @login_required
+    def update_schedule_payments(schedule_id):
+        from .models import ScheduledPayment, PaymentSchedule, TaxRecord
+        from decimal import Decimal, ROUND_HALF_UP
+
+        sch = db.session.get(PaymentSchedule, schedule_id)
+        if not sch:
+            return '<div class="alert alert-danger py-2 small">Schedule not found.</div>', 200
+        tr = sch.tax_record
+        if not tr:
+            return '<div class="alert alert-danger py-2 small">Invalid schedule.</div>', 200
+        client = tr.client
+        if not client or client.firm_id != current_user.firm_id:
+            return '<div class="alert alert-danger py-2 small">Forbidden.</div>', 403
+        if not current_user.is_admin() and client not in current_user.clients:
+            return '<div class="alert alert-danger py-2 small">Forbidden.</div>', 403
+
+        pids = [p.id for p in ScheduledPayment.query.filter_by(schedule_id=schedule_id).all()]
+        if not pids:
+            return '<div class="alert alert-danger py-2 small">No payments in this schedule.</div>', 200
+
+        updates = []
+        for pid in pids:
+            d_raw = (request.form.get(f"due_date_{pid}") or "").strip()
+            a_raw = (request.form.get(f"amount_{pid}") or "").strip()
+            try:
+                d_obj = datetime.strptime(d_raw, "%Y-%m-%d").date()
+            except ValueError:
+                return render_template(
+                    "partials/export_schedule_payments.html",
+                    schedule=sch,
+                    payments=ScheduledPayment.query.filter_by(schedule_id=schedule_id)
+                    .order_by(ScheduledPayment.due_date.asc(), ScheduledPayment.id.asc())
+                    .all(),
+                    save_message="Invalid date on one or more rows.",
+                ), 200
+            try:
+                amt_dec = Decimal(str(a_raw)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            except Exception:
+                return render_template(
+                    "partials/export_schedule_payments.html",
+                    schedule=sch,
+                    payments=ScheduledPayment.query.filter_by(schedule_id=schedule_id)
+                    .order_by(ScheduledPayment.due_date.asc(), ScheduledPayment.id.asc())
+                    .all(),
+                    save_message="Invalid amount on one or more rows.",
+                ), 200
+            if amt_dec != amt_dec.quantize(Decimal("1")):
+                return render_template(
+                    "partials/export_schedule_payments.html",
+                    schedule=sch,
+                    payments=ScheduledPayment.query.filter_by(schedule_id=schedule_id)
+                    .order_by(ScheduledPayment.due_date.asc(), ScheduledPayment.id.asc())
+                    .all(),
+                    save_message="Amounts must be whole dollars.",
+                ), 200
+            if amt_dec < 1:
+                return render_template(
+                    "partials/export_schedule_payments.html",
+                    schedule=sch,
+                    payments=ScheduledPayment.query.filter_by(schedule_id=schedule_id)
+                    .order_by(ScheduledPayment.due_date.asc(), ScheduledPayment.id.asc())
+                    .all(),
+                    save_message="Each amount must be at least $1.",
+                ), 200
+            updates.append((pid, d_obj, float(amt_dec)))
+
+        try:
+            for pid, d_obj, amt_f in updates:
+                sp = db.session.get(ScheduledPayment, pid)
+                if not sp or sp.schedule_id != schedule_id:
+                    raise ValueError("payment mismatch")
+                sp.due_date = d_obj
+                sp.amount = amt_f
+                sp.tax_period = f"{d_obj.year}00"
+            db.session.flush()
+            log_action("Updated scheduled export payments", entity_type="PaymentSchedule", entity_id=schedule_id)
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            return render_template(
+                "partials/export_schedule_payments.html",
+                schedule=sch,
+                payments=ScheduledPayment.query.filter_by(schedule_id=schedule_id)
+                .order_by(ScheduledPayment.due_date.asc(), ScheduledPayment.id.asc())
+                .all(),
+                save_message="Could not save changes.",
+            ), 200
+
+        payments = (
+            ScheduledPayment.query.filter_by(schedule_id=schedule_id)
+            .order_by(ScheduledPayment.due_date.asc(), ScheduledPayment.id.asc())
+            .all()
+        )
+        return render_template(
+            "partials/export_schedule_payments.html",
+            schedule=sch,
+            payments=payments,
+            save_message="Changes saved.",
         )
 
     @app.route('/export/auto', methods=['POST'])
@@ -736,7 +808,7 @@ def create_app():
                         amount=float(Decimal(int(dollars)).quantize(Decimal("0.00"))),
                         status="pending",
                         eft_number="000000000000000",
-                        tax_period=f"{d.year}{str(d.month).zfill(2)}",
+                            tax_period=f"{calendar_year}00",
                         input_method="B",
                         input_date=today,  # one-click file date
                         input_time=noon,
@@ -854,10 +926,10 @@ def create_app():
 
             tax_period = _digits_only(p.tax_period)
             if not re.fullmatch(r"\d{6}", tax_period):
-                return f"Tax Period must be YYYYMM or YYYY00 for client {c.id}.", 400
+                return f"Tax Period must be YYYY00 for client {c.id}.", 400
             month = int(tax_period[4:6])
-            if month != 0 and (month < 1 or month > 12):
-                return f"Tax Period month must be 00 (annual) or 01-12 for client {c.id}.", 400
+            if month != 0:
+                return f"Tax Period month must be 00 (annual) for client {c.id}.", 400
 
             if not p.due_date:
                 return f"Settlement Date missing for client {c.id}.", 400
@@ -913,32 +985,27 @@ def create_app():
         if not current_user.is_admin() and client not in current_user.clients:
             return "<div class='alert alert-danger'>Unauthorized Access</div>", 403
 
-        latest_payment = (
-            ScheduledPayment.query
-            .join(PaymentSchedule, ScheduledPayment.schedule_id == PaymentSchedule.id)
-            .join(TaxRecord, PaymentSchedule.tax_record_id == TaxRecord.id)
+        latest_record = (
+            TaxRecord.query
             .filter(TaxRecord.client_id == client.id)
-            .order_by(
-                ScheduledPayment.input_date.desc(),
-                ScheduledPayment.input_time.desc(),
-                ScheduledPayment.id.desc(),
-            )
+            .order_by(TaxRecord.id.desc())
             .first()
         )
-
-        latest_record = None
-        if latest_payment and latest_payment.schedule and latest_payment.schedule.tax_record:
-            latest_record = latest_payment.schedule.tax_record
 
         # Return the main panel with the selected client's information
         now = datetime.now()
         iso_date_string = now.strftime('%Y-%m-%d')
+        ssn_last2 = ""
+        if getattr(client, "tax_id", None):
+            d = re.sub(r"\D+", "", client.tax_id or "")
+            if re.fullmatch(r"\d{9}", d):
+                ssn_last2 = d[-2:]
         return render_template(
             'partials/main_panel.html', 
             client=client,
-            latest_payment=latest_payment,
             latest_record=latest_record,
             default_taxpayer_type=infer_taxpayer_type_from_tin(getattr(client, "tax_id", None)),
+            ssn_last2=ssn_last2,
             default_input_date=iso_date_string,
             default_input_time=now.strftime('%H:%M')
         )
@@ -1074,7 +1141,7 @@ def create_app():
     @app.route('/tax-payments', methods=['POST'])
     @login_required
     def create_tax_payment():
-        from .models import Client, TaxRecord, ScheduledPayment, PaymentSchedule
+        from .models import Client, TaxRecord
         from decimal import Decimal
 
         # Verification & Client Lookup
@@ -1088,14 +1155,11 @@ def create_app():
             return "Forbidden", 403
 
         # Data Extraction
-        amount = request.form.get('total_payment_amount', '0')
-        settlement_date = request.form.get('settlement_date', '')
-        tax_period_raw = request.form.get('tax_period', '').strip()
-        tin_raw = (request.form.get('tin') or '').strip()
-        tin_digits = re.sub(r"\D+", "", tin_raw)
+        amount = request.form.get('total_annual_amount', '0')
+        tax_year_raw = (request.form.get('tax_period') or '').strip()
+        tin_raw_in = (request.form.get('tin') or '').strip()
+        tin_digits_in = re.sub(r"\D+", "", tin_raw_in)
         pin_raw = (request.form.get('taxpayer_pin') or '').strip()
-        taxpayer_type_in = (request.form.get('taxpayer_type_code') or '').strip().upper()
-        taxpayer_type = taxpayer_type_in or infer_taxpayer_type_from_tin(tin_raw)
 
         # Validation Logic
         try:
@@ -1104,13 +1168,16 @@ def create_app():
                 response = make_response('<div class="alert alert-danger">Payment amount must be whole dollars (no decimals).</div>', 200)
                 return response
             payment_amount = float(payment_amount_dec)
-            settle_date_obj = datetime.strptime(settlement_date, '%Y-%m-%d').date()
         except ValueError:
             response = make_response('<div class="alert alert-danger">Check your date/amount format.</div>', 200)
             return response
 
+        tin_digits = tin_digits_in
+        if not tin_digits:
+            # Allow leaving SSN hidden/unchanged.
+            tin_digits = re.sub(r"\D+", "", client.tax_id or "")
         if not re.fullmatch(r"\d{9}", tin_digits):
-            response = make_response('<div class="alert alert-danger">TIN must be 9 digits.</div>', 200)
+            response = make_response('<div class="alert alert-danger">SSN must be 9 digits.</div>', 200)
             return response
 
         pin = _require_4_digit_pin(pin_raw)
@@ -1118,14 +1185,10 @@ def create_app():
             response = make_response('<div class="alert alert-danger">Taxpayer PIN must be exactly 4 digits.</div>', 200)
             return response
 
-        try:
-            tax_period_digits, tax_year_int = normalize_tax_period_storage(tax_period_raw)
-        except ValueError:
-            response = make_response(
-                '<div class="alert alert-danger">Tax Period must be YYYY or YYYYMM (annual exports as YYYY00).</div>',
-                200,
-            )
+        if not re.fullmatch(r"\d{4}", tax_year_raw):
+            response = make_response('<div class="alert alert-danger">Tax Year must be YYYY.</div>', 200)
             return response
+        tax_year_int = int(tax_year_raw)
 
         # Tax metadata is fixed for this app.
         tax_type_code_stored = "10406"
@@ -1134,8 +1197,8 @@ def create_app():
 
         # Save to Database
         try:
-            # Keep the client's stored TIN in sync with the tax input.
-            client.tax_id = tin_raw
+            # Keep the client's stored SSN/PIN in sync with the tax input.
+            client.tax_id = tin_digits
             client.taxpayer_pin = pin
 
             # Create the Record
@@ -1147,32 +1210,12 @@ def create_app():
                 tax_form=tax_form_val,
                 tax_type_code=tax_type_code_stored,
                 tax_type=tax_type_label,
-                taxpayer_type=taxpayer_type if taxpayer_type in {'B', 'I'} else 'I',
+                taxpayer_type='I',
                 description=None,
             )
             db.session.add(new_record)
             db.session.flush()
-
-            new_schedule = PaymentSchedule(tax_record_id=new_record.id, schedule_name="Unspecified")
-            db.session.add(new_schedule)
-            db.session.flush()
-
-            # Create the Payment (only export-related fields persisted; placeholder EFT for schema)
-            new_payment = ScheduledPayment(
-                schedule_id=new_schedule.id,
-                due_date=settle_date_obj,
-                amount=payment_amount,
-                status='pending',
-                eft_number='000000000000000',
-                tax_period=tax_period_digits,
-                input_method='B',
-                input_date=settle_date_obj,
-                input_time=time(12, 0),
-            )
-
-            db.session.add(new_payment)
-            db.session.flush()
-            log_action('Created Tax Payment', entity_type='ScheduledPayment', entity_id=new_payment.id)
+            log_action('Saved Client Tax Data', entity_type='TaxRecord', entity_id=new_record.id)
             db.session.commit()
             success_html = f'<div class="alert alert-success">Tax data saved for {client.name}</div>'
             response = make_response(success_html, 200)
