@@ -659,6 +659,62 @@ def create_app(config_object=Config):
             raise ValueError("Could not split dollars by quarter targets")
         return parts
 
+    @app.route("/export/schedule/client/<int:client_id>", methods=["GET"])
+    @login_required
+    def get_or_create_client_schedule(client_id: int):
+        """
+        Ensure the client has a schedule for their latest tax record so the user can
+        add/remove/edit payments even before generating.
+        """
+        from .models import Client, TaxRecord, PaymentSchedule, ScheduledPayment
+
+        client = db.session.get(Client, client_id)
+        if not client:
+            return '<div class="alert alert-danger py-2 small">Client not found.</div>', 200
+        if client.firm_id != current_user.firm_id:
+            return '<div class="alert alert-danger py-2 small">Forbidden.</div>', 403
+        if not current_user.is_admin() and client not in current_user.clients:
+            return '<div class="alert alert-danger py-2 small">Forbidden.</div>', 403
+
+        latest_record = (
+            TaxRecord.query
+            .filter_by(client_id=client.id)
+            .order_by(TaxRecord.id.desc())
+            .first()
+        )
+        if not latest_record:
+            return '<div class="alert alert-light border py-2 small mb-0">Save client tax data first to create a payment schedule.</div>', 200
+
+        sch = (
+            PaymentSchedule.query
+            .filter_by(tax_record_id=latest_record.id)
+            .order_by(PaymentSchedule.id.desc())
+            .first()
+        )
+        if not sch:
+            try:
+                sch = PaymentSchedule(tax_record_id=latest_record.id, schedule_name="Manual schedule")
+                db.session.add(sch)
+                db.session.flush()
+                log_action("Created manual payment schedule", entity_type="PaymentSchedule", entity_id=sch.id)
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
+                return '<div class="alert alert-danger py-2 small">Could not create schedule.</div>', 200
+
+        payments = (
+            ScheduledPayment.query.filter_by(schedule_id=sch.id)
+            .order_by(ScheduledPayment.due_date.asc(), ScheduledPayment.id.asc())
+            .all()
+        )
+        return render_template(
+            "partials/export_schedule_payments.html",
+            schedule=sch,
+            payments=payments,
+            save_message=None,
+            last_added_id=None,
+        )
+
     @app.route('/export/generate-schedule', methods=['POST'])
     @login_required
     def generate_export_schedule():
@@ -701,6 +757,17 @@ def create_app(config_object=Config):
         )
         if not latest_record:
             return '<div class="alert alert-danger py-2 small">Save client tax data first (tax year + annual total) before generating payments.</div>', 200
+
+        # Overwrite: remove any existing schedules/payments for this latest tax record.
+        try:
+            existing_schedules = PaymentSchedule.query.filter_by(tax_record_id=latest_record.id).all()
+            for s in existing_schedules:
+                db.session.delete(s)
+            db.session.flush()
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            return '<div class="alert alert-danger py-2 small">Could not overwrite existing schedule.</div>', 200
 
         calendar_year = int(latest_record.tax_year or date.today().year)
         try:

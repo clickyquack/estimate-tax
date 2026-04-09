@@ -104,7 +104,10 @@
                     </form>
                 </div>
 
-                <div id="export-schedule-feedback" class="mt-3"></div>
+                <div id="export-schedule-feedback" class="mt-3"
+                    hx-get="{{ url_for('get_or_create_client_schedule', client_id=client.id) }}"
+                    hx-trigger="load"
+                    hx-swap="innerHTML"></div>
             </div>
         </div>
     </div>
