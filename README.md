@@ -120,23 +120,77 @@ pip freeze > requirements.txt
 
 
 # Run on Server
-### ssh and start virtual environment
+This repository supports:
+- **Local/dev**: `run.py` uses **SQLite**.
+- **Production**: `serve.py` uses **MySQL** + **Waitress** behind **Nginx**.
+
+## Local/dev (SQLite)
 ```
-ssh root@104.236.55.193
-cd ~/estimate-tax
+python run.py
+```
+
+## Production (MySQL + Waitress + Nginx)
+
+### 1) Install OS packages (Ubuntu)
+```
+sudo apt update
+sudo apt install -y python3 python3-venv python3-pip nginx ufw mysql-server
+```
+
+### 2) Create MySQL database and user
+```
+sudo mysql
+```
+```
+CREATE DATABASE estimate_tax CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER 'estimate_tax'@'localhost' IDENTIFIED BY 'REPLACE_WITH_A_LONG_PASSWORD';
+GRANT ALL PRIVILEGES ON estimate_tax.* TO 'estimate_tax'@'localhost';
+FLUSH PRIVILEGES;
+EXIT;
+```
+
+### 3) Deploy code and install Python requirements
+```
+git clone https://github.com/clickyquack/estimate-tax.git
+cd estimate-tax
+python3 -m venv venv
 source venv/bin/activate
+pip install -r requirements.txt
 ```
-from here, you can make any changes desired, including git commands. To check out a different branch, do the following:
+
+### 4) Set environment variables (required in production)
+Production expects these environment variables:
+- `SECRET_KEY`
+- `ENCRYPTION_KEY`
+- `STRIPE_SECRET_KEY`
+- `STRIPE_SEAT_PRICE_ID`
+- `STRIPE_WEBHOOK_SECRET`
+- `DATABASE_URL` (MySQL SQLAlchemy URL)
+
+Example `DATABASE_URL` (local MySQL):
 ```
-git fetch origin
-git checkout Example-Branch
-git pull origin Example-Branch
+mysql+pymysql://estimate_tax:REPLACE_WITH_A_LONG_PASSWORD@127.0.0.1:3306/estimate_tax?charset=utf8mb4
 ```
-after making changes, you should restart the process
-### Restart process 
+
+### 5) Run the app with Waitress (bind to localhost only)
 ```
-pkill -f waitress
-waitress-serve --call app:create_app &
+waitress-serve --host 127.0.0.1 --port 8000 --call serve:build_app
+```
+
+### 6) Put Nginx in front (TLS termination recommended)
+Example Nginx site config (HTTP only; use Certbot/Let’s Encrypt for HTTPS):
+```
+server {
+    listen 80;
+    server_name YOUR_DOMAIN;
+
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
 ```
 
 
