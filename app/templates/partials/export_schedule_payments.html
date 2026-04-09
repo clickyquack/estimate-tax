@@ -5,6 +5,13 @@
 <div class="alert alert-light border py-2 small mb-2">
     Edit settlement dates and amounts if needed, then <strong>Save changes</strong> before exporting.
 </div>
+<div class="d-flex flex-wrap gap-2 justify-content-center mb-2">
+    <button class="btn btn-outline-primary btn-sm"
+        hx-post="{{ url_for('add_schedule_payment', schedule_id=schedule.id) }}"
+        hx-target="#export-schedule-feedback" hx-swap="innerHTML" type="button">
+        Add payment
+    </button>
+</div>
 <form hx-post="{{ url_for('update_schedule_payments', schedule_id=schedule.id) }}"
     hx-target="#export-schedule-feedback" hx-swap="innerHTML">
     <div class="table-responsive">
@@ -13,6 +20,7 @@
                 <tr>
                     <th>Settlement date</th>
                     <th class="text-end" style="width: 8rem;">Amount ($)</th>
+                    <th style="width: 3rem;"></th>
                 </tr>
             </thead>
             <tbody>
@@ -25,6 +33,14 @@
                     <td>
                         <input type="number" name="amount_{{ p.id }}" class="form-control form-control-sm font-monospace text-end"
                             value="{{ '%.0f'|format(p.amount or 0) }}" step="1" min="1" required>
+                    </td>
+                    <td class="text-end">
+                        <button class="btn btn-outline-danger btn-sm"
+                            hx-post="{{ url_for('delete_schedule_payment', schedule_id=schedule.id, payment_id=p.id) }}"
+                            hx-target="#export-schedule-feedback" hx-swap="innerHTML"
+                            hx-confirm="Delete this payment?" type="button">
+                            <i class="bi bi-trash"></i>
+                        </button>
                     </td>
                 </tr>
                 {% endfor %}

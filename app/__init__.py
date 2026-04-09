@@ -881,6 +881,106 @@ def create_app(config_object=Config):
             save_message="Changes saved.",
         )
 
+    @app.route("/export/schedule/<int:schedule_id>/payments/add", methods=["POST"])
+    @login_required
+    def add_schedule_payment(schedule_id):
+        from .models import ScheduledPayment, PaymentSchedule
+        from decimal import Decimal, ROUND_HALF_UP
+
+        sch = db.session.get(PaymentSchedule, schedule_id)
+        if not sch or not sch.tax_record or not sch.tax_record.client:
+            return '<div class="alert alert-danger py-2 small">Schedule not found.</div>', 200
+        client = sch.tax_record.client
+        if client.firm_id != current_user.firm_id:
+            return '<div class="alert alert-danger py-2 small">Forbidden.</div>', 403
+        if not current_user.is_admin() and client not in current_user.clients:
+            return '<div class="alert alert-danger py-2 small">Forbidden.</div>', 403
+
+        existing = (
+            ScheduledPayment.query.filter_by(schedule_id=schedule_id)
+            .order_by(ScheduledPayment.due_date.desc(), ScheduledPayment.id.desc())
+            .first()
+        )
+        next_date = (existing.due_date + timedelta(days=1)) if existing else date.today()
+        next_amount = existing.amount if existing and existing.amount else Decimal("1")
+        try:
+            amt = Decimal(str(next_amount)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        except Exception:
+            amt = Decimal("1.00")
+        if amt < 1:
+            amt = Decimal("1.00")
+
+        try:
+            sp = ScheduledPayment(
+                schedule_id=schedule_id,
+                due_date=next_date,
+                amount=float(amt),
+                status="pending",
+                eft_number="000000000000000",
+                tax_period=f"{next_date.year}00",
+                input_method="B",
+                input_date=date.today(),
+                input_time=time(12, 0),
+            )
+            db.session.add(sp)
+            db.session.flush()
+            log_action("Added scheduled export payment", entity_type="PaymentSchedule", entity_id=schedule_id)
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            return '<div class="alert alert-danger py-2 small">Could not add payment.</div>', 200
+
+        payments = (
+            ScheduledPayment.query.filter_by(schedule_id=schedule_id)
+            .order_by(ScheduledPayment.due_date.asc(), ScheduledPayment.id.asc())
+            .all()
+        )
+        return render_template(
+            "partials/export_schedule_payments.html",
+            schedule=sch,
+            payments=payments,
+            save_message="Payment added.",
+        )
+
+    @app.route("/export/schedule/<int:schedule_id>/payments/<int:payment_id>/delete", methods=["POST"])
+    @login_required
+    def delete_schedule_payment(schedule_id, payment_id):
+        from .models import ScheduledPayment, PaymentSchedule
+
+        sch = db.session.get(PaymentSchedule, schedule_id)
+        if not sch or not sch.tax_record or not sch.tax_record.client:
+            return '<div class="alert alert-danger py-2 small">Schedule not found.</div>', 200
+        client = sch.tax_record.client
+        if client.firm_id != current_user.firm_id:
+            return '<div class="alert alert-danger py-2 small">Forbidden.</div>', 403
+        if not current_user.is_admin() and client not in current_user.clients:
+            return '<div class="alert alert-danger py-2 small">Forbidden.</div>', 403
+
+        sp = db.session.get(ScheduledPayment, payment_id)
+        if not sp or sp.schedule_id != schedule_id:
+            return '<div class="alert alert-danger py-2 small">Payment not found.</div>', 200
+
+        try:
+            db.session.delete(sp)
+            db.session.flush()
+            log_action("Deleted scheduled export payment", entity_type="PaymentSchedule", entity_id=schedule_id)
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            return '<div class="alert alert-danger py-2 small">Could not delete payment.</div>', 200
+
+        payments = (
+            ScheduledPayment.query.filter_by(schedule_id=schedule_id)
+            .order_by(ScheduledPayment.due_date.asc(), ScheduledPayment.id.asc())
+            .all()
+        )
+        return render_template(
+            "partials/export_schedule_payments.html",
+            schedule=sch,
+            payments=payments,
+            save_message="Payment deleted.",
+        )
+
     @app.route('/export/auto', methods=['POST'])
     @login_required
     def export_auto():
@@ -1209,6 +1309,29 @@ def create_app(config_object=Config):
         if client.firm_id != current_user.firm_id:
             return make_response('<div class="alert alert-danger py-2 small">Forbidden.</div>', 403)
 
+        latest_record = (
+            TaxRecord.query
+            .filter_by(client_id=client.id)
+            .order_by(TaxRecord.id.desc())
+            .first()
+        )
+        if not latest_record:
+            return make_response(
+                '<div class="alert alert-danger py-2 small">Save client tax data first (Tax Year + Annual Total) before importing payments.</div>',
+                200,
+            )
+
+        sch = (
+            PaymentSchedule.query
+            .filter_by(tax_record_id=latest_record.id)
+            .order_by(PaymentSchedule.id.desc())
+            .first()
+        )
+        if not sch:
+            sch = PaymentSchedule(tax_record_id=latest_record.id, schedule_name="CSV import")
+            db.session.add(sch)
+            db.session.flush()
+
         try:
             raw = up.read()
             text = raw.decode("utf-8-sig", errors="replace")
@@ -1237,19 +1360,6 @@ def create_app(config_object=Config):
 
                 # Columns 2–7, 9, 14–16, 18–19 are accepted in the file but not stored (export-only save path).
 
-                tax_form = row[8].strip()
-                # Column 10 = Tax Type (e.g. ES); 5 digits means tax type code only with no separate label
-                raw_tax_col = row[10].strip()
-                if re.fullmatch(r"\d{5}", raw_tax_col):
-                    ttc = raw_tax_col
-                    tax_type_label = ""
-                else:
-                    tax_type_label = raw_tax_col.upper()
-                    ttc = map_csv_tax_type_to_code(raw_tax_col)
-                    if tt == "I" and not ttc:
-                        ttc = "10406"
-
-                tp_digits, tax_year_int = normalize_tax_period_storage(row[11])
                 amt = parse_decimal_amount(row[12])
                 settle = parse_flexible_date(row[13])
 
@@ -1260,38 +1370,15 @@ def create_app(config_object=Config):
                 if not re.fullmatch(r"\d{9}", tin_digits):
                     raise ValueError("EIN/SSN must be 9 digits")
 
-                if tt == "B":
-                    tax_form_f = tax_form
-                    ttc_f = ttc
+                # Only append payments when the SSN matches the client.
+                existing_digits = _digits_only(client.tax_id or "")
+                if re.fullmatch(r"\d{9}", existing_digits):
+                    if tin_digits != existing_digits:
+                        raise ValueError("SSN does not match selected client")
                 else:
-                    tax_form_f = tax_form or "1040"
-                    ttc_f = ttc or "10406"
-
-                if ttc_f and not re.fullmatch(r"\d{5}", ttc_f):
-                    raise ValueError("Tax Type column: use 5-digit code, or a label like ES (maps to code 10406 for individuals).")
-
-                # Sync TIN on client (formatted)
-                if ein:
+                    # If the client doesn't have an SSN saved yet, fill it from the import.
                     client.tax_id = ein
-
-                new_record = TaxRecord(
-                    client_id=client.id,
-                    tax_year=tax_year_int,
-                    estimated_tax_total=float(amt),
-                    uploaded_by=current_user.id,
-                    tax_form=tax_form_f,
-                    tax_type_code=ttc_f,
-                    tax_type=tax_type_label or None,
-                    taxpayer_type=tt,
-                    description=None,
-                    upload_source="csv_import",
-                )
-                db.session.add(new_record)
-                db.session.flush()
-
-                sch = PaymentSchedule(tax_record_id=new_record.id, schedule_name="CSV import")
-                db.session.add(sch)
-                db.session.flush()
+                    db.session.flush()
 
                 sp = ScheduledPayment(
                     schedule_id=sch.id,
@@ -1299,7 +1386,7 @@ def create_app(config_object=Config):
                     amount=float(amt),
                     status="pending",
                     eft_number="000000000000000",
-                    tax_period=tp_digits,
+                    tax_period=f"{settle.year}00",
                     input_method="B",
                     input_date=settle,
                     input_time=time(12, 0),
