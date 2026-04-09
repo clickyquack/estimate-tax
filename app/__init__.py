@@ -778,6 +778,7 @@ def create_app(config_object=Config):
             schedule=schedule,
             payments=payments,
             save_message=f"Generated {len(payments)} payment(s). Review or edit below, then save if you change anything.",
+            last_added_id=None,
         )
 
     @app.route("/export/schedule/<int:schedule_id>/payments", methods=["POST"])
@@ -816,6 +817,7 @@ def create_app(config_object=Config):
                     .order_by(ScheduledPayment.due_date.asc(), ScheduledPayment.id.asc())
                     .all(),
                     save_message="Invalid date on one or more rows.",
+                    last_added_id=None,
                 ), 200
             try:
                 amt_dec = Decimal(str(a_raw)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
@@ -827,6 +829,7 @@ def create_app(config_object=Config):
                     .order_by(ScheduledPayment.due_date.asc(), ScheduledPayment.id.asc())
                     .all(),
                     save_message="Invalid amount on one or more rows.",
+                    last_added_id=None,
                 ), 200
             if amt_dec != amt_dec.quantize(Decimal("1")):
                 return render_template(
@@ -836,6 +839,7 @@ def create_app(config_object=Config):
                     .order_by(ScheduledPayment.due_date.asc(), ScheduledPayment.id.asc())
                     .all(),
                     save_message="Amounts must be whole dollars.",
+                    last_added_id=None,
                 ), 200
             if amt_dec < 1:
                 return render_template(
@@ -845,6 +849,7 @@ def create_app(config_object=Config):
                     .order_by(ScheduledPayment.due_date.asc(), ScheduledPayment.id.asc())
                     .all(),
                     save_message="Each amount must be at least $1.",
+                    last_added_id=None,
                 ), 200
             updates.append((pid, d_obj, float(amt_dec)))
 
@@ -868,6 +873,7 @@ def create_app(config_object=Config):
                 .order_by(ScheduledPayment.due_date.asc(), ScheduledPayment.id.asc())
                 .all(),
                 save_message="Could not save changes.",
+                last_added_id=None,
             ), 200
 
         payments = (
@@ -880,6 +886,7 @@ def create_app(config_object=Config):
             schedule=sch,
             payments=payments,
             save_message="Changes saved.",
+            last_added_id=None,
         )
 
     @app.route("/export/schedule/<int:schedule_id>/payments", methods=["GET"])
@@ -906,6 +913,7 @@ def create_app(config_object=Config):
             schedule=sch,
             payments=payments,
             save_message=None,
+            last_added_id=None,
         )
 
     @app.route("/export/schedule/<int:schedule_id>/payments/add", methods=["POST"])
@@ -967,6 +975,7 @@ def create_app(config_object=Config):
             schedule=sch,
             payments=payments,
             save_message="Payment added.",
+            last_added_id=sp.id,
         )
 
     @app.route("/export/schedule/<int:schedule_id>/payments/<int:payment_id>/delete", methods=["POST"])
@@ -1006,6 +1015,7 @@ def create_app(config_object=Config):
             schedule=sch,
             payments=payments,
             save_message="Payment deleted.",
+            last_added_id=None,
         )
 
     @app.route('/export/auto', methods=['POST'])

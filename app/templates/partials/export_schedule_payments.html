@@ -25,14 +25,15 @@
             </thead>
             <tbody>
                 {% for p in payments %}
+                {% set is_blank = (last_added_id is defined and last_added_id and p.id == last_added_id) %}
                 <tr>
                     <td>
                         <input type="date" name="due_date_{{ p.id }}" class="form-control form-control-sm font-monospace"
-                            value="{{ p.due_date.strftime('%Y-%m-%d') }}" required>
+                            value="{{ '' if is_blank else p.due_date.strftime('%Y-%m-%d') }}" required>
                     </td>
                     <td>
                         <input type="number" name="amount_{{ p.id }}" class="form-control form-control-sm font-monospace text-end"
-                            value="{{ '%.0f'|format(p.amount or 0) }}" step="1" min="1" required>
+                            value="{{ '' if is_blank else ('%.0f'|format(p.amount or 0)) }}" step="1" min="1" required>
                     </td>
                     <td class="text-end">
                         <button class="btn btn-outline-danger btn-sm"
