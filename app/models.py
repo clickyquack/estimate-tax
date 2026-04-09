@@ -1,5 +1,6 @@
 from .extensions import db
 from sqlalchemy.sql import func
+from datetime import date, datetime
 
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -257,8 +258,8 @@ class ScheduledPayment(db.Model):
     tax_period = db.Column(db.String(6), nullable=False)
     input_method = db.Column(db.String(1), nullable=False)
     transaction_code = db.Column(db.String(10))
-    input_date = db.Column(db.Date, server_default=func.current_date())
-    input_time = db.Column(db.Time, server_default=func.current_time())
+    input_date = db.Column(db.Date, default=date.today)
+    input_time = db.Column(db.Time, default=lambda: datetime.now().time())
     payment_status = db.Column(db.String(50))
     # Encrypted fields
     _eft_number_encrypted = db.Column('eft_number', db.Text)

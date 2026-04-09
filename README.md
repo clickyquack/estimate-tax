@@ -177,8 +177,14 @@ mysql+pymysql://estimate_tax:REPLACE_WITH_A_LONG_PASSWORD@127.0.0.1:3306/estimat
 waitress-serve --host 127.0.0.1 --port 8000 --call serve:build_app
 ```
 
-### 6) Put Nginx in front (TLS termination recommended)
-Example Nginx site config (HTTP only; use Certbot/Let’s Encrypt for HTTPS):
+### 6) Put Nginx in front (HTTPS)
+Install Certbot + get a Let’s Encrypt certificate:
+```
+sudo apt update
+sudo apt install -y certbot python3-certbot-nginx
+```
+
+Create an Nginx site (replace `YOUR_DOMAIN`), then reload Nginx:
 ```
 server {
     listen 80;
@@ -192,6 +198,14 @@ server {
     }
 }
 ```
+
+Request the certificate and let Certbot update Nginx for HTTPS automatically:
+```
+sudo certbot --nginx -d YOUR_DOMAIN
+sudo systemctl enable --now certbot.timer
+```
+
+After Certbot runs, confirm HTTP redirects to HTTPS and the app loads at `https://YOUR_DOMAIN`.
 
 
 
