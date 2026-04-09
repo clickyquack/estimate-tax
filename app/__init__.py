@@ -1085,6 +1085,52 @@ def create_app(config_object=Config):
             last_added_id=None,
         )
 
+    @app.route("/export/schedule/<int:schedule_id>/payments/delete-all", methods=["POST"])
+    @login_required
+    def delete_all_schedule_payments(schedule_id):
+        from .models import ScheduledPayment, PaymentSchedule
+
+        sch = db.session.get(PaymentSchedule, schedule_id)
+        if not sch or not sch.tax_record or not sch.tax_record.client:
+            return '<div class="alert alert-danger py-2 small">Schedule not found.</div>', 200
+        client = sch.tax_record.client
+        if client.firm_id != current_user.firm_id:
+            return '<div class="alert alert-danger py-2 small">Forbidden.</div>', 403
+        if not current_user.is_admin() and client not in current_user.clients:
+            return '<div class="alert alert-danger py-2 small">Forbidden.</div>', 403
+
+        rows = ScheduledPayment.query.filter_by(schedule_id=schedule_id).all()
+        if not rows:
+            return render_template(
+                "partials/export_schedule_payments.html",
+                schedule=sch,
+                payments=[],
+                save_message="No payments to delete.",
+                last_added_id=None,
+            )
+
+        try:
+            for sp in rows:
+                db.session.delete(sp)
+            db.session.flush()
+            log_action(
+                f"Deleted all scheduled export payments ({len(rows)})",
+                entity_type="PaymentSchedule",
+                entity_id=schedule_id,
+            )
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            return '<div class="alert alert-danger py-2 small">Could not delete payments.</div>', 200
+
+        return render_template(
+            "partials/export_schedule_payments.html",
+            schedule=sch,
+            payments=[],
+            save_message=f"Deleted {len(rows)} payment(s).",
+            last_added_id=None,
+        )
+
     @app.route('/export/auto', methods=['POST'])
     @login_required
     def export_auto():
@@ -1452,6 +1498,8 @@ def create_app(config_object=Config):
 
         ok = 0
         errors = []
+        # Batch file date for export filtering (must match export form file_date; same as generated payments).
+        import_file_date = date.today()
         for idx, row in enumerate(parse_csv_payment_rows(text), start=1):
             if _looks_like_header(row):
                 continue
@@ -1494,7 +1542,7 @@ def create_app(config_object=Config):
                     eft_number="000000000000000",
                     tax_period=f"{settle.year}00",
                     input_method="B",
-                    input_date=settle,
+                    input_date=import_file_date,
                     input_time=time(12, 0),
                 )
                 db.session.add(sp)

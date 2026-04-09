@@ -11,6 +11,14 @@
         hx-target="#export-schedule-feedback" hx-swap="innerHTML" type="button">
         Add payment
     </button>
+    {% if payments %}
+    <button class="btn btn-outline-danger btn-sm"
+        hx-post="{{ url_for('delete_all_schedule_payments', schedule_id=schedule.id) }}"
+        hx-target="#export-schedule-feedback" hx-swap="innerHTML"
+        hx-confirm="Delete all payments in this schedule? This cannot be undone." type="button">
+        Delete all
+    </button>
+    {% endif %}
 </div>
 <form hx-post="{{ url_for('update_schedule_payments', schedule_id=schedule.id) }}"
     hx-target="#export-schedule-feedback" hx-swap="innerHTML">
