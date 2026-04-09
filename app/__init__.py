@@ -1465,6 +1465,7 @@ def create_app(config_object=Config):
     
     
     @app.route('/billing-portal', methods=['POST'])
+    @login_required
     def billing_portal():
         from .models import Firm
         firm = Firm.query.get(current_user.firm_id)
