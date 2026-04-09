@@ -2,6 +2,7 @@ from flask import (
     Flask,
     app,
     current_app,
+    has_request_context,
     make_response,
     render_template,
     request,
@@ -27,6 +28,30 @@ import json
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 
+
+def get_client_ip():
+    """
+    Client IP when behind a reverse proxy. Prefer X-Forwarded-For (first hop) and
+    X-Real-IP; fall back to remote_addr (direct connection or ProxyFix).
+    """
+    if not has_request_context():
+        return None
+    xff = (request.headers.get("X-Forwarded-For") or "").strip()
+    if xff:
+        first = xff.split(",")[0].strip()
+        if first:
+            return first
+    xri = (request.headers.get("X-Real-IP") or "").strip()
+    if xri:
+        return xri
+    return request.remote_addr
+
+
+def _client_ip_for_limiter():
+    ip = get_client_ip()
+    return ip if ip is not None else get_remote_address()
+
+
 from .tax_helpers import (
     map_csv_tax_type_to_code,
     normalize_tax_period_storage,
@@ -51,13 +76,13 @@ def log_action(action, entity_type=None, entity_id=None):
         action=action,
         entity_type=entity_type,
         entity_id=entity_id,
-        ip_address=request.remote_addr
+        ip_address=get_client_ip() or request.remote_addr,
     )
     db.session.add(new_log)
 
 
 # Initialize the rate limiter (attached to app later if not testing)
-limiter = Limiter(get_remote_address)
+limiter = Limiter(_client_ip_for_limiter)
 
 
 def infer_taxpayer_type_from_tin(tin_raw: str) -> str:
