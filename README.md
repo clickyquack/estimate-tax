@@ -177,6 +177,12 @@ mysql+pymysql://estimate_tax:REPLACE_WITH_A_LONG_PASSWORD@127.0.0.1:3306/estimat
 waitress-serve --host 127.0.0.1 --port 8000 --call serve:build_app
 ```
 
+Restart Waitress (manual process):
+```
+pkill -9 -f "waitress-serve"
+waitress-serve --host 127.0.0.1 --port 8000 --call serve:build_app
+```
+
 ### 6) Put Nginx in front (HTTPS)
 Install Certbot + get a Let’s Encrypt certificate:
 ```
