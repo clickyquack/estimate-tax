@@ -575,7 +575,21 @@ def create_app(config_object=Config):
             return []
         base = total_cents // n
         rem = total_cents % n
-        return [base + (1 if i < rem else 0) for i in range(n)]
+        parts = [base] * n
+        # Distribute the remainder roughly evenly across the sequence rather than
+        # front-loading the first `rem` payments.
+        acc = 0
+        for i in range(n):
+            acc += rem
+            if acc >= n:
+                parts[i] += 1
+                acc -= n
+        return parts
+
+    def _split_amount_dollars(total_dollars: int, n: int) -> list[int]:
+        if total_dollars < 0:
+            raise ValueError("total_dollars must be non-negative")
+        return [int(x) for x in _split_amount_cents(int(total_dollars), int(n))]
 
     def _split_total_dollars_by_quarter_targets(calendar_year: int, start: date, pay_dates: list[date], total_dollars: int) -> list[int]:
         """
@@ -713,9 +727,7 @@ def create_app(config_object=Config):
             if period == "quarterly":
                 dollar_parts = _split_total_dollars_by_quarter_targets(calendar_year, year_start, pay_dates, total_dollars)
             else:
-                base = total_dollars // len(pay_dates)
-                rem = total_dollars % len(pay_dates)
-                dollar_parts = [base + (1 if i < rem else 0) for i in range(len(pay_dates))]
+                dollar_parts = _split_amount_dollars(total_dollars, len(pay_dates))
         except Exception:
             return '<div class="alert alert-danger py-2 small">Could not split payment amounts.</div>', 200
 
@@ -960,9 +972,7 @@ def create_app(config_object=Config):
                     dollar_parts = _split_total_dollars_by_quarter_targets(calendar_year, year_start, pay_dates, total_dollars)
                 else:
                     # Even split across the generated payments (whole dollars).
-                    base = total_dollars // len(pay_dates)
-                    rem = total_dollars % len(pay_dates)
-                    dollar_parts = [base + (1 if i < rem else 0) for i in range(len(pay_dates))]
+                    dollar_parts = _split_amount_dollars(total_dollars, len(pay_dates))
             except Exception:
                 return make_response('<div class="alert alert-danger py-2 small">Could not split payment amounts.</div>', 200)
 
