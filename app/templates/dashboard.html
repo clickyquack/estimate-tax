@@ -112,5 +112,18 @@
                 }
             }
         });
+
+        // After importing CSV payments, refresh the schedule payments table so the UI reflects DB changes.
+        document.body.addEventListener('paymentsImported', function (ev) {
+            try {
+                var detail = (ev && ev.detail) ? ev.detail : {};
+                var scheduleId = detail.schedule_id;
+                if (!scheduleId) return;
+                if (!document.getElementById('export-schedule-feedback')) return;
+                htmx.ajax('GET', '/export/schedule/' + scheduleId + '/payments', { target: '#export-schedule-feedback', swap: 'innerHTML' });
+            } catch (e) {
+                // no-op
+            }
+        });
     </script>
 {% endblock %}

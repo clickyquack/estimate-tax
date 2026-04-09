@@ -22,6 +22,7 @@ from functools import wraps
 from flask_login import current_user, login_required, login_user, logout_user
 import os
 import re
+import json
 
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -881,6 +882,32 @@ def create_app(config_object=Config):
             save_message="Changes saved.",
         )
 
+    @app.route("/export/schedule/<int:schedule_id>/payments", methods=["GET"])
+    @login_required
+    def get_schedule_payments(schedule_id):
+        from .models import ScheduledPayment, PaymentSchedule
+
+        sch = db.session.get(PaymentSchedule, schedule_id)
+        if not sch or not sch.tax_record or not sch.tax_record.client:
+            return '<div class="alert alert-danger py-2 small">Schedule not found.</div>', 200
+        client = sch.tax_record.client
+        if client.firm_id != current_user.firm_id:
+            return '<div class="alert alert-danger py-2 small">Forbidden.</div>', 403
+        if not current_user.is_admin() and client not in current_user.clients:
+            return '<div class="alert alert-danger py-2 small">Forbidden.</div>', 403
+
+        payments = (
+            ScheduledPayment.query.filter_by(schedule_id=schedule_id)
+            .order_by(ScheduledPayment.due_date.asc(), ScheduledPayment.id.asc())
+            .all()
+        )
+        return render_template(
+            "partials/export_schedule_payments.html",
+            schedule=sch,
+            payments=payments,
+            save_message=None,
+        )
+
     @app.route("/export/schedule/<int:schedule_id>/payments/add", methods=["POST"])
     @login_required
     def add_schedule_payment(schedule_id):
@@ -1408,7 +1435,10 @@ def create_app(config_object=Config):
                 f'<div class="alert alert-warning py-2 small border-0"><div class="fw-semibold">Issues</div>'
                 f'<ul class="mb-0 ps-3">{lis}{more}</ul></div>'
             )
-        return make_response("".join(parts), 200)
+        resp = make_response("".join(parts), 200)
+        # Tell HTMX to refresh the schedule payments panel after importing.
+        resp.headers["HX-Trigger"] = json.dumps({"paymentsImported": {"schedule_id": sch.id}})
+        return resp
 
     @app.route('/tax-payments', methods=['POST'])
     @login_required
