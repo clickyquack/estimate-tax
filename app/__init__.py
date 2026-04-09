@@ -1258,9 +1258,11 @@ def create_app(config_object=Config):
         batch_filer_id = _digits_only(current_user.batch_filer_id)
         master_pin = _digits_only(current_user.master_inquiry_pin)
         if not re.fullmatch(r"\d{9}", batch_filer_id):
-            return "Batch Filer ID must be set to 9 digits in profile.", 400
+            flash("Batch Filer ID must be set to 9 digits in Profile before exporting.", "danger")
+            return redirect(url_for("profile"))
         if not re.fullmatch(r"\d{4}", master_pin):
-            return "Master Inquiry PIN must be set to 4 digits in profile.", 400
+            flash("Master Inquiry PIN must be set to 4 digits in Profile before exporting.", "danger")
+            return redirect(url_for("profile"))
 
         # Allocate per-user filer sequence number for this file_date
         if current_user.last_filer_sequence_date == file_date:
