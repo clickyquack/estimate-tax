@@ -132,14 +132,14 @@ def _ensure_sqlite_schema_up_to_date(app: Flask) -> None:
         return
 
 
-def create_app():
+def create_app(config_object=Config):
     app = Flask(__name__)
     
     # -----------------------------------
     # ------------ DATABASE -------------
     # -----------------------------------
 
-    app.config.from_object(Config)
+    app.config.from_object(config_object)
 
     db.init_app(app)
 
