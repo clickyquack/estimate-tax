@@ -197,7 +197,8 @@ def create_app(config_object=Config):
     if app.config['TESTING']:
         limiter.enabled = False
     else:
-        limiter.init_app(app)
+        limiter.enabled = False # Disabled so rate limiter can be used through nginx
+        # limiter.init_app(app)
 
     # -------------------------------------
     # ------------ DECORATORS -------------
@@ -289,7 +290,12 @@ def create_app(config_object=Config):
                 owner = User(name=owner_name, email=admin_email, firm_id=new_firm.id, role_id=admin_role.id)
                 owner.set_password(owner_password)
                 db.session.add(owner)
-                db.session.commit()
+                db.session.flush()
+
+                # Get the host for redirect URLs (handle potential proxy-added headers)
+                raw_host = request.host.split(',')[0].strip()
+                success_url = f"http://{raw_host}{url_for('login')}?registered=success"
+                cancel_url = f"http://{raw_host}{url_for('register_firm')}?error=cancelled"
 
                 # Create Stripe Checkout Session for the subscription
                 checkout_session = stripe.checkout.Session.create(
@@ -303,9 +309,11 @@ def create_app(config_object=Config):
                     customer_email=firm_email,
                     
                     # Where to send them after they pay or cancel
-                    success_url=url_for('login', _external=True) + '?registered=success',
-                    cancel_url=url_for('register_firm', _external=True) + '?error=cancelled',
+                    success_url=success_url,
+                    cancel_url=cancel_url,
                 )
+
+                db.session.commit()
                 return redirect(checkout_session.url, code=303)
             
             except Exception as e:
@@ -405,6 +413,10 @@ def create_app(config_object=Config):
             if user.firm.status == "Active":
                 login_user(user, remember=remember)
                 return redirect(url_for('dashboard'))
+            elif user.firm.status == "Pending":
+                # Dont allow pending firms in because they aren't stripe customers yet
+                flash('Invalid email or password', 'danger')
+                return redirect(url_for('login'))
             else:
                 if user.is_admin():
                     # Allow admins in with limited access
