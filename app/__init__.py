@@ -153,6 +153,15 @@ def _ensure_sqlite_schema_up_to_date(app: Flask) -> None:
         if "tax_type" not in cols:
             db.session.execute(text("ALTER TABLE tax_records ADD COLUMN tax_type VARCHAR(50)"))
             db.session.commit()
+
+        # Stripe-related firm fields: older local DBs may be missing these columns.
+        firm_cols = [r[1] for r in db.session.execute(text("PRAGMA table_info(firms)")).all()]
+        if "stripe_customer_id" not in firm_cols:
+            db.session.execute(text("ALTER TABLE firms ADD COLUMN stripe_customer_id VARCHAR(255)"))
+            db.session.commit()
+        if "plan_type" not in firm_cols:
+            db.session.execute(text("ALTER TABLE firms ADD COLUMN plan_type VARCHAR(50)"))
+            db.session.commit()
     except Exception:
         db.session.rollback()
         return
@@ -2069,7 +2078,7 @@ def create_app(config_object=Config):
     @app.route('/sysadmin/user/<int:user_id>/update', methods=['POST'])
     @sysadmin_required
     def sysadmin_update_user(user_id):
-        from .models import User, Role
+        from .models import User, Role, Firm
         
         target_user = User.query.get_or_404(user_id)
         
@@ -2080,6 +2089,14 @@ def create_app(config_object=Config):
         target_user.firm_id = int(request.form.get('firm_id'))
         
         new_role_name = request.form.get('role_name')
+        if target_user.id == current_user.id and new_role_name and new_role_name != target_user.role.name:
+            all_firms = Firm.query.order_by(Firm.name).all()
+            return render_template(
+                'partials/sysadmin_edit_user.html',
+                target_user=target_user,
+                all_firms=all_firms,
+                error="You can't change your own role.",
+            )
         if new_role_name:
             target_user.role = Role.query.filter_by(name=new_role_name).first()
         
@@ -2101,6 +2118,8 @@ def create_app(config_object=Config):
         from flask import make_response
         
         target_user = User.query.get_or_404(user_id)
+        if target_user.id == current_user.id:
+            return make_response("You can't delete your own account.", 400)
         log_action(f"Sysadmin Panel: Deleted {target_user.name} (Firm ID: {target_user.firm_id})", "User", target_user.id)
         db.session.delete(target_user)
         db.session.commit()

@@ -36,12 +36,17 @@
 
         <div class="mb-3">
             <label class="form-label small fw-bold text-muted">System Role</label>
-            <select name="role_name" class="form-select">
-                <option value="Accountant" {% if target_user.role.name == 'Accountant' %}selected{% endif %}>Accountant</option>
-                <option value="Admin" {% if target_user.role.name == 'Admin' %}selected{% endif %}>Admin</option>
-                <option value="SysAdmin" {% if target_user.role.name == 'SysAdmin' %}selected{% endif %}>SysAdmin</option>
-                <option value="Developer" {% if target_user.role.name == 'Developer' %}selected{% endif %}>Developer</option>
-            </select>
+            {% if current_user.is_authenticated and current_user.id == target_user.id %}
+                <input type="text" class="form-control" value="{{ target_user.role.name }}" disabled>
+                <small class="text-muted d-block mt-1">You can’t change your own role.</small>
+            {% else %}
+                <select name="role_name" class="form-select">
+                    <option value="Accountant" {% if target_user.role.name == 'Accountant' %}selected{% endif %}>Accountant</option>
+                    <option value="Admin" {% if target_user.role.name == 'Admin' %}selected{% endif %}>Admin</option>
+                    <option value="SysAdmin" {% if target_user.role.name == 'SysAdmin' %}selected{% endif %}>SysAdmin</option>
+                    <option value="Developer" {% if target_user.role.name == 'Developer' %}selected{% endif %}>Developer</option>
+                </select>
+            {% endif %}
         </div>
 
         <div class="mb-3">
@@ -69,12 +74,14 @@
         <div class="d-grid gap-2">
             <button type="submit" class="btn btn-primary fw-bold">Update User</button>
 
-            <button type="button" class="btn btn-link btn-sm text-danger text-decoration-none mt-2"
-                hx-delete="{{ url_for('sysadmin_delete_user', user_id=target_user.id) }}"
-                hx-confirm="Permanently remove {{ target_user.name }} from the entire system?"
-                data-bs-dismiss="modal">
-                <i class="bi bi-person-x me-1"></i> Delete User Globally
-            </button>
+            {% if not (current_user.is_authenticated and current_user.id == target_user.id) %}
+                <button type="button" class="btn btn-link btn-sm text-danger text-decoration-none mt-2"
+                    hx-delete="{{ url_for('sysadmin_delete_user', user_id=target_user.id) }}"
+                    hx-confirm="Permanently remove {{ target_user.name }} from the entire system?"
+                    data-bs-dismiss="modal">
+                    <i class="bi bi-person-x me-1"></i> Delete User Globally
+                </button>
+            {% endif %}
         </div>
     </form>
 </div>

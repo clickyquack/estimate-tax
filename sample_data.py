@@ -1,10 +1,11 @@
 # To run: python sample_data.py
 
-import random
-from faker import Faker
 from app import create_app
 from app.extensions import db
 from app.models import Firm, Role, User, Client
+
+import random
+from faker import Faker
 
 fake = Faker()
 app = create_app()
@@ -28,7 +29,9 @@ def generate_sample_data():
         test_firm = Firm(
             name="Test Firm", 
             email="test@test.com",
-            status="Active"
+            status="Active",
+            plan_type="Local",
+            stripe_customer_id=None,
         )
         db.session.add(test_firm)
         db.session.commit()
@@ -93,22 +96,18 @@ def generate_sample_data():
         db.session.commit()
 
 
-        # Clients generated with Faker
+        # Clients generated with Faker (individuals only)
         for _ in range(30):
-
-            if random.random() > 0.5:
-                id_format = "##-#######"  # EIN
-            else:
-                id_format = "###-##-####" # SSN`
+            id_format = "###-##-####"  # SSN
                 
             client = Client(
-                name=fake.company() if id_format == "##-#######" else fake.name(),
-                email=fake.company_email(),
+                name=fake.name(),
+                email=fake.free_email(),
                 tax_id=fake.numerify(text=id_format),
                 taxpayer_pin=fake.numerify(text="####"),
                 firm_id=test_firm.id,
                 address=fake.address(),
-                phone=fake.phone_number()
+                phone=fake.phone_number(),
             )
             # Randomly assign to either Accountant
             client.users.append(random.choice([Accountant1, Accountant2]))
