@@ -404,6 +404,10 @@ def create_app(config_object=Config):
             if user.firm.status == "Active":
                 login_user(user, remember=remember)
                 return redirect(url_for('dashboard'))
+            elif user.firm.status == "Pending":
+                # Dont allow pending firms in because they aren't stripe customers yet
+                flash('Invalid email or password', 'danger')
+                return redirect(url_for('login'))
             else:
                 if user.is_admin():
                     # Allow admins in with limited access
