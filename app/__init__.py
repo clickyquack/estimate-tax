@@ -188,7 +188,8 @@ def create_app(config_object=Config):
     if app.config['TESTING']:
         limiter.enabled = False
     else:
-        limiter.init_app(app)
+        limiter.enabled = False # Disabled so rate limiter can be used through nginx
+        # limiter.init_app(app)
 
     # -------------------------------------
     # ------------ DECORATORS -------------
@@ -280,7 +281,7 @@ def create_app(config_object=Config):
                 owner = User(name=owner_name, email=admin_email, firm_id=new_firm.id, role_id=admin_role.id)
                 owner.set_password(owner_password)
                 db.session.add(owner)
-                db.session.commit()
+                db.session.flush()
 
                 # Create Stripe Checkout Session for the subscription
                 checkout_session = stripe.checkout.Session.create(
@@ -297,6 +298,8 @@ def create_app(config_object=Config):
                     success_url=url_for('login', _external=True) + '?registered=success',
                     cancel_url=url_for('register_firm', _external=True) + '?error=cancelled',
                 )
+
+                db.session.commit()
                 return redirect(checkout_session.url, code=303)
             
             except Exception as e:
