@@ -283,6 +283,11 @@ def create_app(config_object=Config):
                 db.session.add(owner)
                 db.session.flush()
 
+                # Get the host for redirect URLs (handle potential proxy-added headers)
+                raw_host = request.host.split(',')[0].strip()
+                success_url = f"http://{raw_host}{url_for('login')}?registered=success"
+                cancel_url = f"http://{raw_host}{url_for('register_firm')}?error=cancelled"
+
                 # Create Stripe Checkout Session for the subscription
                 checkout_session = stripe.checkout.Session.create(
                     payment_method_types=['card'],
@@ -295,8 +300,8 @@ def create_app(config_object=Config):
                     customer_email=firm_email,
                     
                     # Where to send them after they pay or cancel
-                    success_url=url_for('login', _external=True) + '?registered=success',
-                    cancel_url=url_for('register_firm', _external=True) + '?error=cancelled',
+                    success_url=success_url,
+                    cancel_url=cancel_url,
                 )
 
                 db.session.commit()
