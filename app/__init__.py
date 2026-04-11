@@ -838,7 +838,10 @@ def create_app(config_object=Config):
             return '<div class="alert alert-danger py-2 small">Saved annual total is too small for this many payments (each installment must be at least $1).</div>', 200
 
         try:
-            if period == "quarterly":
+            # Default quarterly dates align with quarter ends (25%/50%/75%/100% cumulative targets).
+            # Custom first payment dates use anchored calendar spacing; quarter-target math would
+            # over-allocate to the first payment when earlier quarters have no dates—split evenly instead.
+            if period == "quarterly" and first_payment_date is None:
                 dollar_parts = _split_total_dollars_by_quarter_targets(calendar_year, year_start, pay_dates, total_dollars)
             else:
                 dollar_parts = _split_amount_dollars(total_dollars, len(pay_dates))
@@ -1264,7 +1267,7 @@ def create_app(config_object=Config):
                 return make_response('<div class="alert alert-danger py-2 small">Saved annual total is too small for this many payments (each installment must be at least $1).</div>', 200)
 
             try:
-                if period == "quarterly":
+                if period == "quarterly" and first_payment_date is None:
                     dollar_parts = _split_total_dollars_by_quarter_targets(calendar_year, year_start, pay_dates, total_dollars)
                 else:
                     # Even split across the generated payments (whole dollars).
@@ -1868,6 +1871,10 @@ def create_app(config_object=Config):
             from .models import Role
             all_accountants = User.query.filter(User.role.has(Role.name == 'Accountant'), User.firm_id == current_user.firm_id).all()
             return render_template("partials/add_client_form.html", all_accountants=all_accountants, error=ssn_err)
+        if not ssn:
+            from .models import Role
+            all_accountants = User.query.filter(User.role.has(Role.name == 'Accountant'), User.firm_id == current_user.firm_id).all()
+            return render_template("partials/add_client_form.html", all_accountants=all_accountants, error="SSN is required.")
 
         new_client = Client(
             name=request.form.get('name'),

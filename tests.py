@@ -1,5 +1,7 @@
 # to run tests manually, use: pytest tests.py
 
+from decimal import Decimal
+
 import pytest
 from app import create_app
 from app.extensions import db
@@ -352,3 +354,53 @@ def test_client_payments_permissions_accountant_cannot_access_unassigned(auth_ac
     _, unassigned_id = _get_client_ids(app)
     resp = auth_accountant.get(f"/export/schedule/client/{unassigned_id}")
     assert resp.status_code == 403
+
+
+def test_quarterly_with_custom_first_date_splits_evenly(auth_accountant, app):
+    """Anchored quarterly dates must not use calendar-quarter cumulative targets (which over-allocate to the first date when Q1 is empty)."""
+    assigned_id, _ = _get_client_ids(app)
+    resp = _save_tax_data(
+        auth_accountant,
+        client_id=assigned_id,
+        tin="123-45-6789",
+        pin="1234",
+        year="2026",
+        total_annual_amount="300",
+    )
+    assert resp.status_code == 200
+
+    resp = auth_accountant.post(
+        "/export/generate-schedule",
+        data={
+            "client_id": str(assigned_id),
+            "period": "quarterly",
+            "first_payment_date": "2026-04-15",
+        },
+    )
+    assert resp.status_code == 200
+    with app.app_context():
+        tr = TaxRecord.query.filter_by(client_id=assigned_id).order_by(TaxRecord.id.desc()).first()
+        sch = PaymentSchedule.query.filter_by(tax_record_id=tr.id).order_by(PaymentSchedule.id.desc()).first()
+        payments = (
+            ScheduledPayment.query.filter_by(schedule_id=sch.id)
+            .order_by(ScheduledPayment.due_date.asc())
+            .all()
+        )
+        assert len(payments) == 3
+        amounts = [int(Decimal(str(p.amount))) for p in payments]
+        assert amounts == [100, 100, 100]
+
+
+def test_create_client_requires_ssn(auth_admin, app):
+    resp = auth_admin.post(
+        "/admin/client/create",
+        data={
+            "name": "No SSN Client",
+            "email": "nossn@example.com",
+            "taxpayer_pin": "1234",
+        },
+    )
+    assert resp.status_code == 200
+    assert b"SSN is required" in resp.data
+    with app.app_context():
+        assert Client.query.filter_by(name="No SSN Client").first() is None
