@@ -1769,9 +1769,11 @@ def create_app(config_object=Config):
             return redirect(url_for('admin'))
             
         try:
+            raw_host = request.host.split(',')[0].strip()
+            admin_url = f"http://{raw_host}{url_for('admin')}"
             portal_session = stripe.billing_portal.Session.create(
                 customer=firm.stripe_customer_id,
-                return_url=url_for('admin', _external=True)
+                return_url=admin_url
             )
             return redirect(portal_session.url, code=303)
         except Exception as e:
